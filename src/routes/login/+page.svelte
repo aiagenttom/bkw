@@ -16,12 +16,12 @@
     {/if}
     <form method="POST">
       <div class="mb-3">
-        <label class="form-label fw-semibold">Username</label>
-        <input name="username" class="form-control" required autofocus />
+        <label class="form-label fw-semibold" for="username">Username</label>
+        <input id="username" name="username" class="form-control" required />
       </div>
       <div class="mb-4">
-        <label class="form-label fw-semibold">Password</label>
-        <input name="password" type="password" class="form-control" required />
+        <label class="form-label fw-semibold" for="password">Password</label>
+        <input id="password" name="password" type="password" class="form-control" required />
       </div>
       <button class="btn btn-warning w-100 fw-bold">
         <i class="bi bi-box-arrow-in-right me-2"></i>Login

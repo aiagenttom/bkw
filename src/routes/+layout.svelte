@@ -25,10 +25,10 @@
         </li>
         {#if isAdmin}
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" class:active={path.startsWith('/admin')}
-             href="#" role="button" data-bs-toggle="dropdown">
+          <button class="nav-link dropdown-toggle btn btn-link p-0" class:active={path.startsWith('/admin')}
+                  type="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="bi bi-gear-fill me-1"></i>Admin
-          </a>
+          </button>
           <ul class="dropdown-menu dropdown-menu-dark">
             <li><a class="dropdown-item" href="/admin"><i class="bi bi-house me-2"></i>Overview</a></li>
             <li><hr class="dropdown-divider" /></li>
@@ -67,7 +67,8 @@
           </li>
         {/if}
       </ul>
-  </div>
+    </div><!-- /.navbar-collapse -->
+  </div><!-- /.container-fluid -->
 </nav>
 
 <main class="container-fluid py-3 px-3 px-lg-4">

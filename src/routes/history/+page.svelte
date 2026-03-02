@@ -185,8 +185,8 @@
     <small class="text-muted">Historische Tagesdaten pro Wechselrichter</small>
   </div>
   <div class="d-flex gap-2 align-items-center">
-    <label class="text-muted small mb-0">Zeitraum:</label>
-    <select bind:value={selMonths} on:change={changeMonths} class="form-select form-select-sm" style="width:130px">
+    <label class="text-muted small mb-0" for="history-months">Zeitraum:</label>
+    <select id="history-months" bind:value={selMonths} on:change={changeMonths} class="form-select form-select-sm" style="width:130px">
       <option value={1}>1 Monat</option>
       <option value={3}>3 Monate</option>
       <option value={6}>6 Monate</option>

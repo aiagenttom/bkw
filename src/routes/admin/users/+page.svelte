@@ -31,7 +31,7 @@
           <label class="form-check-label small" for="chkAdmin">Admin</label>
         </div>
         <div class="col-12 col-md-1">
-          <button class="btn btn-success btn-sm w-100"><i class="bi bi-plus"></i></button>
+          <button class="btn btn-success btn-sm w-100" aria-label="Add user"><i class="bi bi-plus"></i></button>
         </div>
       </div>
     </form>
@@ -67,7 +67,7 @@
               <form method="POST" action="?/delete"
                     on:submit|preventDefault={e => { if(confirm('Delete user?')) e.target.submit(); }}>
                 <input type="hidden" name="id" value={u.id} />
-                <button class="btn btn-outline-danger btn-sm py-0">
+                <button class="btn btn-outline-danger btn-sm py-0" aria-label="Delete user">
                   <i class="bi bi-trash"></i>
                 </button>
               </form>

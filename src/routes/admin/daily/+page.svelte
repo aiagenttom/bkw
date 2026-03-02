@@ -40,8 +40,8 @@
   <div class="card-body">
     <form method="POST" action="?/snapshot" class="d-flex gap-2 align-items-end">
       <div>
-        <label class="form-label form-label-sm text-muted">Date (empty = today)</label>
-        <input name="date" type="date" class="form-control form-control-sm" style="width:160px" />
+        <label class="form-label form-label-sm text-muted" for="snapshot-date">Date (empty = today)</label>
+        <input id="snapshot-date" name="date" type="date" class="form-control form-control-sm" style="width:160px" />
       </div>
       <button class="btn btn-primary btn-sm">
         <i class="bi bi-camera me-1"></i>Snapshot now

@@ -40,19 +40,19 @@
     <form method="POST" action="?/saveSettings">
       <div class="row g-3">
         <div class="col-12 col-md-6">
-          <label class="form-label fw-semibold small">API Base URL</label>
-          <input name="api_base_url" class="form-control form-control-sm"
+          <label class="form-label fw-semibold small" for="api-base-url">API Base URL</label>
+          <input id="api-base-url" name="api_base_url" class="form-control form-control-sm"
                  value={settings.api_base_url || ''} />
           <small class="text-muted">Used when no full_url is set on an inverter</small>
         </div>
         <div class="col-6 col-md-3">
-          <label class="form-label fw-semibold small">Sync Interval (min)</label>
-          <input name="sync_interval" type="number" min="1" class="form-control form-control-sm"
+          <label class="form-label fw-semibold small" for="sync-interval">Sync Interval (min)</label>
+          <input id="sync-interval" name="sync_interval" type="number" min="1" class="form-control form-control-sm"
                  value={settings.sync_interval || '1'} />
         </div>
         <div class="col-6 col-md-3">
-          <label class="form-label fw-semibold small">Auto-refresh (s)</label>
-          <input name="auto_refresh_s" type="number" min="5" class="form-control form-control-sm"
+          <label class="form-label fw-semibold small" for="auto-refresh">Auto-refresh (s)</label>
+          <input id="auto-refresh" name="auto_refresh_s" type="number" min="5" class="form-control form-control-sm"
                  value={settings.auto_refresh_s || '30'} />
         </div>
       </div>
@@ -63,31 +63,31 @@
       <div class="fw-semibold small mb-2"><i class="bi bi-currency-euro me-1"></i>Tariff &amp; Savings</div>
       <div class="row g-3">
         <div class="col-12 col-md-4">
-          <label class="form-label fw-semibold small">Tariff Mode</label>
-          <select name="price_mode" class="form-select form-select-sm">
+          <label class="form-label fw-semibold small" for="global-price-mode">Tariff Mode</label>
+          <select id="global-price-mode" name="price_mode" class="form-select form-select-sm">
             <option value="fixed"  selected={settings.price_mode !== 'spotty'}>Fixer Tarif (ct/kWh)</option>
             <option value="spotty" selected={settings.price_mode === 'spotty'}>Spotty Energie API</option>
           </select>
         </div>
         <div class="col-6 col-md-2">
-          <label class="form-label fw-semibold small">Fixer Tarif (ct/kWh)</label>
+          <label class="form-label fw-semibold small" for="global-fixed-price">Fixer Tarif (ct/kWh)</label>
           <div class="input-group input-group-sm">
-            <input name="fixed_price_ct" type="number" min="0" step="0.1" class="form-control form-control-sm"
+            <input id="global-fixed-price" name="fixed_price_ct" type="number" min="0" step="0.1" class="form-control form-control-sm"
                    value={settings.fixed_price_ct || '30'} />
             <span class="input-group-text">ct</span>
           </div>
           <small class="text-muted">Used when mode is "Fixer Tarif"</small>
         </div>
         <div class="col-12 col-md-4">
-          <label class="form-label fw-semibold small">Spotty API URL</label>
-          <input name="spotty_url" class="form-control form-control-sm"
+          <label class="form-label fw-semibold small" for="spotty-url">Spotty API URL</label>
+          <input id="spotty-url" name="spotty_url" class="form-control form-control-sm"
                  value={settings.spotty_url || ''} />
           <small class="text-muted">Used when mode is "Spotty Energie"</small>
         </div>
         <div class="col-6 col-md-2">
-          <label class="form-label fw-semibold small">UTC Offset (h)</label>
+          <label class="form-label fw-semibold small" for="tz-offset">UTC Offset (h)</label>
           <div class="input-group input-group-sm">
-            <input name="tz_offset_h" type="number" min="-12" max="14" class="form-control form-control-sm"
+            <input id="tz-offset" name="tz_offset_h" type="number" min="-12" max="14" class="form-control form-control-sm"
                    value={settings.tz_offset_h || '1'} />
             <span class="input-group-text">h</span>
           </div>
@@ -127,28 +127,28 @@
       <input type="hidden" name="id" value={inv.id} />
       <div class="row g-2 mb-2">
         <div class="col-12 col-md-4">
-          <label class="form-label form-label-sm">Name</label>
-          <input name="name" class="form-control form-control-sm" value={inv.name} required />
+          <label class="form-label form-label-sm" for="inv-name-{inv.id}">Name</label>
+          <input id="inv-name-{inv.id}" name="name" class="form-control form-control-sm" value={inv.name} required />
         </div>
         <div class="col-12 col-md-4">
-          <label class="form-label form-label-sm">Full URL <span class="text-muted">(optional override)</span></label>
-          <input name="full_url" class="form-control form-control-sm"
+          <label class="form-label form-label-sm" for="inv-url-{inv.id}">Full URL <span class="text-muted">(optional override)</span></label>
+          <input id="inv-url-{inv.id}" name="full_url" class="form-control form-control-sm"
                  placeholder="http://192.168.1.x/api/livedata/status"
                  value={inv.full_url || ''} />
         </div>
         <div class="col-12 col-md-3">
-          <label class="form-label form-label-sm">Nginx Path</label>
+          <label class="form-label form-label-sm" for="inv-path-{inv.id}">Nginx Path</label>
           <div class="input-group input-group-sm">
             <span class="input-group-text text-muted small" style="font-size:.7rem">
               {(settings.api_base_url||'').replace(/\/$/,'')}/
             </span>
-            <input name="api_path" class="form-control form-control-sm"
+            <input id="inv-path-{inv.id}" name="api_path" class="form-control form-control-sm"
                    placeholder="opendtu_erwin/" value={inv.api_path || ''} />
           </div>
         </div>
         <div class="col-6 col-md-1">
-          <label class="form-label form-label-sm">Color</label>
-          <input name="color" type="color" class="form-control form-control-sm form-control-color"
+          <label class="form-label form-label-sm" for="inv-color-{inv.id}">Color</label>
+          <input id="inv-color-{inv.id}" name="color" type="color" class="form-control form-control-sm form-control-color"
                  value={inv.color || '#3498db'} />
         </div>
       </div>
@@ -158,8 +158,8 @@
           <small class="text-muted fw-semibold"><i class="bi bi-currency-euro me-1"></i>Tarif</small>
         </div>
         <div class="col-6 col-md-3">
-          <label class="form-label form-label-sm">Modus</label>
-          <select name="price_mode" class="form-select form-select-sm">
+          <label class="form-label form-label-sm" for="inv-mode-{inv.id}">Modus</label>
+          <select id="inv-mode-{inv.id}" name="price_mode" class="form-select form-select-sm">
             <option value="global" selected={!inv.price_mode}>
               Global ({settings.price_mode === 'spotty' ? 'Spotty' : `${settings.fixed_price_ct ?? 30} ct`})
             </option>
@@ -168,9 +168,9 @@
           </select>
         </div>
         <div class="col-6 col-md-2">
-          <label class="form-label form-label-sm">Fixer Preis (ct/kWh)</label>
+          <label class="form-label form-label-sm" for="inv-price-{inv.id}">Fixer Preis (ct/kWh)</label>
           <div class="input-group input-group-sm">
-            <input name="fixed_price_ct" type="number" min="0" step="0.1"
+            <input id="inv-price-{inv.id}" name="fixed_price_ct" type="number" min="0" step="0.1"
                    class="form-control form-control-sm"
                    placeholder="{settings.fixed_price_ct ?? 30} (global)"
                    value={inv.fixed_price_ct ?? ''} />
@@ -227,21 +227,21 @@
     <form method="POST" action="?/add">
       <div class="row g-2 mb-2">
         <div class="col-12 col-md-3">
-          <label class="form-label form-label-sm">Name *</label>
-          <input name="name" class="form-control form-control-sm" placeholder="e.g. Dach" required />
+          <label class="form-label form-label-sm" for="add-name">Name *</label>
+          <input id="add-name" name="name" class="form-control form-control-sm" placeholder="e.g. Dach" required />
         </div>
         <div class="col-12 col-md-4">
-          <label class="form-label form-label-sm">Full URL</label>
-          <input name="full_url" class="form-control form-control-sm"
+          <label class="form-label form-label-sm" for="add-url">Full URL</label>
+          <input id="add-url" name="full_url" class="form-control form-control-sm"
                  placeholder="http://192.168.1.x/api/livedata/status" />
         </div>
         <div class="col-12 col-md-3">
-          <label class="form-label form-label-sm">Nginx Path</label>
-          <input name="api_path" class="form-control form-control-sm" placeholder="opendtu_dach/" />
+          <label class="form-label form-label-sm" for="add-path">Nginx Path</label>
+          <input id="add-path" name="api_path" class="form-control form-control-sm" placeholder="opendtu_dach/" />
         </div>
         <div class="col-6 col-md-1">
-          <label class="form-label form-label-sm">Color</label>
-          <input name="color" type="color" class="form-control form-control-sm form-control-color"
+          <label class="form-label form-label-sm" for="add-color">Color</label>
+          <input id="add-color" name="color" type="color" class="form-control form-control-sm form-control-color"
                  value="#9b59b6" />
         </div>
       </div>

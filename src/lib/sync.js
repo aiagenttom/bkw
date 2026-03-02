@@ -248,6 +248,6 @@ export function syncDaily(date) {
   }
   db.exec('COMMIT');
 
-  console.log(`[daily] snapshotted ${rows.length} inverters for ${target} (mode=${priceMode})`);
+  console.log(`[daily] snapshotted ${rows.length} inverters for ${target} (mode=${globalMode})`);
   return rows;
 }

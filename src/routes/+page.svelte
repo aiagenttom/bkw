@@ -168,7 +168,16 @@
         </div>
         <!-- Savings row -->
         <div class="mt-2 pt-2 border-top d-flex justify-content-between align-items-center">
-          <small class="text-muted"><i class="bi bi-currency-euro me-1"></i>Ersparnis heute</small>
+          <small class="text-muted">
+            <i class="bi bi-currency-euro me-1"></i>Ersparnis heute
+            {@const effectiveMode = inv.price_mode || settings.price_mode || 'fixed'}
+            {@const effectiveFixed = inv.fixed_price_ct ?? settings.fixed_price_ct ?? 30}
+            {#if effectiveMode === 'spotty'}
+              <span class="badge bg-primary ms-1" style="font-size:.65rem">⚡ Spot</span>
+            {:else}
+              <span class="badge bg-secondary ms-1" style="font-size:.65rem">🔒 {effectiveFixed} ct</span>
+            {/if}
+          </small>
           <span class="fw-bold text-success">
             {sav != null ? '€\u202f' + sav.toFixed(2) : '–'}
           </span>

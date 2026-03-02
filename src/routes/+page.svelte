@@ -137,6 +137,8 @@
   {#each visibleInverters as inv}
   {@const d = liveData[inv.name] ?? {}}
   {@const sav = todaySavings[inv.name]}
+  {@const effectiveMode = inv.price_mode || settings.price_mode || 'fixed'}
+  {@const effectiveFixed = inv.fixed_price_ct ?? settings.fixed_price_ct ?? 30}
   <div class="col-sm-6 col-xl-4">
     <div class="card h-100 bkw-live-card shadow-sm">
       <div class="card-body">
@@ -170,8 +172,6 @@
         <div class="mt-2 pt-2 border-top d-flex justify-content-between align-items-center">
           <small class="text-muted">
             <i class="bi bi-currency-euro me-1"></i>Ersparnis heute
-            {@const effectiveMode = inv.price_mode || settings.price_mode || 'fixed'}
-            {@const effectiveFixed = inv.fixed_price_ct ?? settings.fixed_price_ct ?? 30}
             {#if effectiveMode === 'spotty'}
               <span class="badge bg-primary ms-1" style="font-size:.65rem">⚡ Spot</span>
             {:else}

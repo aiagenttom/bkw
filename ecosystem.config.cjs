@@ -8,6 +8,7 @@ module.exports = {
 
       // Prozess-Verhalten
       instances: 1,             // Single-Instance (SQLite ist single-writer)
+      exec_mode: 'fork',        // fork statt cluster (SQLite + SvelteKit Node-Adapter)
       autorestart: true,
       watch: false,
       max_memory_restart: '300M',

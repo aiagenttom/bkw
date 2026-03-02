@@ -55,6 +55,21 @@
     charts.temp    = new Chart(document.getElementById('cTemp'),    { type: 'line', data: { labels: [], datasets: [] }, options: opts('°C', false) });
     charts.current = new Chart(document.getElementById('cCurrent'), { type: 'line', data: { labels: [], datasets: [] }, options: opts('Ampere (A)') });
     charts.voltage = new Chart(document.getElementById('cVoltage'), { type: 'line', data: { labels: [], datasets: [] }, options: opts('Voltage (V)', false) });
+    charts.price   = new Chart(document.getElementById('cPrice'),   {
+      type: 'line',
+      data: { labels: [], datasets: [] },
+      options: {
+        ...opts('ct/kWh', false),
+        plugins: {
+          ...opts('ct/kWh', false).plugins,
+          tooltip: { callbacks: { title: items => items[0]?.label + ':00' || '' } },
+        },
+        scales: {
+          x: { ticks: { callback(v) { return this.getLabelForValue(v) + ':00'; } } },
+          y: { beginAtZero: false, title: { display: true, text: 'ct/kWh', font: { size: 11 } } },
+        },
+      },
+    });
 
     await fetchData();
     const secs = parseInt(settings.auto_refresh_s || 30);
@@ -101,9 +116,31 @@
     const savR = await fetch('/api/today-savings');
     const savJ = await savR.json();
     if (savJ.success) todaySavings = savJ.data;
+
+    // Spotty price curve for selected day
+    const priceR = await fetch(`/api/prices?date=${selDate}`);
+    const priceJ = await priceR.json();
+    if (priceJ.success && priceJ.data.length) {
+      const priceLabels = priceJ.data.map(r => String(r.hour).padStart(2, '0'));
+      charts.price.data = {
+        labels: priceLabels,
+        datasets: [{
+          label: 'Ø Spotpreis (ct/kWh)',
+          data: priceJ.data.map(r => r.avg_price),
+          borderColor: '#f39c12',
+          backgroundColor: 'rgba(243,156,18,0.1)',
+          borderWidth: 2, pointRadius: 3, tension: 0.3, fill: true,
+        }],
+      };
+      charts.price.update('none');
+      showPriceChart = true;
+    } else {
+      showPriceChart = false;
+    }
   }
 
   let histRows = [];
+  let showPriceChart = false;
 
   function fmt(v, d = 1) { return v != null ? v.toFixed(d) : '–'; }
 </script>
@@ -247,6 +284,19 @@
     <div class="card shadow-sm">
       <div class="card-header fw-semibold"><i class="bi bi-plug text-success me-2"></i>AC Voltage (V)</div>
       <div class="card-body"><canvas id="cVoltage" style="max-height:240px"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- Spot price chart (hidden when no data for selected day) -->
+<div class="row g-3 mb-4" class:d-none={!showPriceChart}>
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-graph-up text-warning me-2"></i>Spotpreis – stündlicher Ø
+        <span class="badge bg-warning text-dark ms-2" style="font-size:.7rem">ct/kWh</span>
+      </div>
+      <div class="card-body"><canvas id="cPrice" style="max-height:200px"></canvas></div>
     </div>
   </div>
 </div>

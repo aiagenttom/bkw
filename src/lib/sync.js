@@ -145,7 +145,21 @@ export async function syncSpottyPrices() {
     if (from && price != null) { ins.run(from, price); count++; }
   }
   db.exec('COMMIT');
-  console.log(`[spotty] stored ${count} price slots`);
+
+  const total = db.prepare('SELECT COUNT(*) AS c FROM spotty_prices').get().c;
+  const oldest = db.prepare('SELECT MIN(ts) AS t FROM spotty_prices').get().t;
+  console.log(`[spotty] +${count} new slots | total: ${total} | oldest: ${oldest ?? '–'}`);
+}
+
+/**
+ * Remove spot prices older than 13 months to keep the DB tidy.
+ * Runs once daily — preserves enough history for year-over-year comparison.
+ */
+export function pruneSpottyPrices() {
+  const { changes } = db.prepare(
+    `DELETE FROM spotty_prices WHERE ts < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-13 months')`
+  ).run();
+  if (changes > 0) console.log(`[spotty] pruned ${changes} old price slots (>13 months)`);
 }
 
 /**

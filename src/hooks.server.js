@@ -1,6 +1,6 @@
 import { getSession, pruneSessions } from '$lib/session.js';
 import db from '$lib/db.js';
-import { syncAll, syncDaily, syncSpottyPrices } from '$lib/sync.js';
+import { syncAll, syncDaily, syncSpottyPrices, pruneSpottyPrices } from '$lib/sync.js';
 import cron from 'node-cron';
 
 // ── Cron scheduler (starts once at module load) ───────────────────────────────
@@ -21,15 +21,12 @@ function scheduleCron() {
 
 scheduleCron();
 
-// ── Daily snapshot at 23:55 ───────────────────────────────────────────────────
+// ── Daily snapshot at 23:55 + spotty price pruning ───────────────────────────
 cron.schedule('55 23 * * *', () => {
-  try {
-    syncDaily();
-  } catch (e) {
-    console.error('[daily] snapshot failed:', e.message);
-  }
+  try { syncDaily(); } catch (e) { console.error('[daily] snapshot failed:', e.message); }
+  try { pruneSpottyPrices(); } catch (e) { console.error('[spotty] prune failed:', e.message); }
 });
-console.log('[cron] daily snapshot scheduled: 55 23 * * *');
+console.log('[cron] daily snapshot + spotty prune scheduled: 55 23 * * *');
 
 // ── Spotty price sync: every hour at :05 ─────────────────────────────────────
 cron.schedule('5 * * * *', () => {

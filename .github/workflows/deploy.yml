@@ -16,10 +16,10 @@ jobs:
         uses: actions/checkout@v4
 
       # ── 2. Node.js 22 einrichten ──────────────────────────────────────────
-      - name: Setup Node.js 22
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
           cache: 'npm'
 
       # ── 3. Abhängigkeiten installieren ────────────────────────────────────
@@ -28,7 +28,7 @@ jobs:
 
       # ── 4. App bauen ──────────────────────────────────────────────────────
       - name: Build
-        run: node --experimental-sqlite node_modules/.bin/vite build
+        run: node_modules/.bin/vite build
 
       # ── 5. SSH-Key einrichten ─────────────────────────────────────────────
       - name: Setup SSH
@@ -65,7 +65,8 @@ jobs:
           ssh -i ~/.ssh/deploy_key \
               -p "${SSH_PORT}" \
               "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-              "cd ${{ secrets.DEPLOY_PATH }} && \
+              "node --version | grep -E '^v(2[0-9]|[3-9][0-9])\.' || { echo 'ERROR: Node.js 20+ required on server'; exit 1; } && \
+               cd ${{ secrets.DEPLOY_PATH }} && \
                npm ci --omit=dev --legacy-peer-deps && \
                pm2 startOrRestart ecosystem.config.cjs --update-env && \
                pm2 save"

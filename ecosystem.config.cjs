@@ -3,7 +3,6 @@ module.exports = {
     {
       name: 'bkw',
       script: 'build/index.js',
-      node_args: '--experimental-sqlite',
       cwd: '/opt/bkw',          // DEPLOY_PATH – ggf. anpassen
 
       // Prozess-Verhalten

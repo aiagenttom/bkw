@@ -67,8 +67,8 @@ jobs:
               "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
               "cd ${{ secrets.DEPLOY_PATH }} && \
                npm ci --omit=dev --legacy-peer-deps && \
-               pm2 restart ecosystem.config.cjs --update-env || \
-               pm2 start ecosystem.config.cjs"
+               pm2 startOrRestart ecosystem.config.cjs --update-env && \
+               pm2 save"
 
       # ── 8. Health-Check ───────────────────────────────────────────────────
       - name: Health check

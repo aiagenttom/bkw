@@ -20,7 +20,7 @@ module.exports = {
       // Umgebungsvariablen (Production)
       env: {
         NODE_ENV: 'production',
-        PORT: 3000,
+        PORT: 3010,
         // BKW_DATA_DIR: '/var/data/bkw',    // optional: DB-Pfad überschreiben
       },
 

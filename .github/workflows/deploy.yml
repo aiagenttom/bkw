@@ -75,6 +75,6 @@ jobs:
         run: |
           sleep 5
           curl --fail --silent --max-time 10 \
-            "http://${{ secrets.SSH_HOST }}:${{ secrets.APP_PORT || 3000 }}" \
+            "http://${{ secrets.SSH_HOST }}:${{ secrets.APP_PORT || 3010 }}" \
             > /dev/null && echo "✅ App is up" || echo "⚠️ Health check failed (non-blocking)"
         continue-on-error: true

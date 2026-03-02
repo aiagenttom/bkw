@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 import { homedir } from 'os';
 import { mkdirSync, existsSync } from 'fs';
@@ -8,7 +8,7 @@ const DATA_DIR = process.env.BKW_DATA_DIR || join(homedir(), '.bkw-data');
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 
 const DB_PATH = process.env.BKW_DB_PATH || join(DATA_DIR, 'bkw.db');
-const db = new DatabaseSync(DB_PATH);
+const db = new Database(DB_PATH);
 
 db.exec('PRAGMA foreign_keys = ON');
 

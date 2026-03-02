@@ -26,8 +26,8 @@ module.exports = {
       },
 
       // Log-Dateien
-      out_file: '/var/log/bkw/out.log',
-      error_file: '/var/log/bkw/error.log',
+      out_file: '/home/lms/.pm2/logs/bkw-out.log',
+      error_file: '/home/lms/.pm2/logs/bkw-error.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },

@@ -1,0 +1,105 @@
+/* BKW Solar Dashboard – Custom Styles */
+
+:root {
+  --bkw-primary: #1a1a2e;
+  --bkw-accent:  #f39c12;
+  --bkw-dark:    #16213e;
+}
+
+body {
+  background-color: #f4f6f9;
+  font-size: 0.9rem;
+}
+
+/* Navbar */
+.bkw-navbar {
+  background: linear-gradient(135deg, var(--bkw-primary) 0%, var(--bkw-dark) 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* Login page */
+.login-bg {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+}
+.bkw-login-card {
+  border: none;
+  border-radius: 12px;
+}
+
+/* Live data cards */
+.bkw-live-card {
+  border: none;
+  border-radius: 12px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.bkw-live-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12) !important;
+}
+
+/* Stat boxes inside live cards */
+.bkw-stat-box {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 6px 4px;
+}
+
+/* Admin cards */
+.bkw-admin-card {
+  border: 1px solid #e3e6ea;
+  border-radius: 10px;
+  transition: all 0.15s ease;
+  color: inherit;
+}
+.bkw-admin-card:hover {
+  border-color: var(--bkw-accent);
+  box-shadow: 0 4px 16px rgba(243,156,18,0.15);
+  transform: translateY(-2px);
+  background: #fffdf5;
+}
+
+/* Cards */
+.card {
+  border: none;
+  border-radius: 10px;
+}
+.card-header {
+  background: #fff;
+  border-bottom: 1px solid #e8eaed;
+  border-radius: 10px 10px 0 0 !important;
+  padding: 0.6rem 1rem;
+}
+
+/* Tables */
+.table-responsive {
+  border-radius: 0 0 10px 10px;
+  overflow: hidden;
+}
+.table th {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.table-dark th {
+  background: #2c3e50;
+  border-color: #34495e;
+}
+
+/* Footer */
+footer {
+  font-size: 0.78rem;
+}
+
+/* Responsive tweaks */
+@media (max-width: 576px) {
+  .bkw-live-card .row-cols-2 > .col {
+    padding: 4px 2px;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #aaa; }

@@ -1,0 +1,80 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # manueller Trigger via GitHub UI
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # ── 1. Code auschecken ────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Node.js 22 einrichten ──────────────────────────────────────────
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # ── 3. Abhängigkeiten installieren ────────────────────────────────────
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      # ── 4. App bauen ──────────────────────────────────────────────────────
+      - name: Build
+        run: node --experimental-sqlite node_modules/.bin/vite build
+
+      # ── 5. SSH-Key einrichten ─────────────────────────────────────────────
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      # ── 6. Build-Artefakte auf den Server synchronisieren ─────────────────
+      # Überträgt: build/, package.json, package-lock.json, ecosystem.config.cjs
+      # Die Datenbank (~/.bkw-data/) liegt außerhalb und wird NICHT berührt.
+      - name: Sync build to VPS
+        run: |
+          SSH_PORT="${{ secrets.SSH_PORT }}"
+          SSH_PORT="${SSH_PORT:-22}"
+
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${SSH_PORT}" \
+            build/ \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/build/"
+
+          rsync -avz \
+            -e "ssh -i ~/.ssh/deploy_key -p ${SSH_PORT}" \
+            package.json package-lock.json ecosystem.config.cjs \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"
+
+      # ── 7. Produktions-Dependencies installieren + PM2 neustarten ─────────
+      - name: Install prod deps & restart PM2
+        run: |
+          SSH_PORT="${{ secrets.SSH_PORT }}"
+          SSH_PORT="${SSH_PORT:-22}"
+
+          ssh -i ~/.ssh/deploy_key \
+              -p "${SSH_PORT}" \
+              "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+              "cd ${{ secrets.DEPLOY_PATH }} && \
+               npm ci --omit=dev --legacy-peer-deps && \
+               pm2 restart ecosystem.config.cjs --update-env || \
+               pm2 start ecosystem.config.cjs"
+
+      # ── 8. Health-Check ───────────────────────────────────────────────────
+      - name: Health check
+        run: |
+          sleep 5
+          curl --fail --silent --max-time 10 \
+            "http://${{ secrets.SSH_HOST }}:${{ secrets.APP_PORT || 3000 }}" \
+            > /dev/null && echo "✅ App is up" || echo "⚠️ Health check failed (non-blocking)"
+        continue-on-error: true

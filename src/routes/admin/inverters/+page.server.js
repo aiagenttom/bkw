@@ -30,9 +30,10 @@ export const actions = {
     // price_mode: if "global" → store NULL (use global default)
     const priceMode   = d.get('price_mode')?.toString() || 'global';
     const fixedPriceCt = d.get('fixed_price_ct')?.toString().trim();
-    db.prepare('UPDATE inverters SET name=?, full_url=?, api_path=?, color=?, price_mode=?, fixed_price_ct=? WHERE id=?').run(
+    db.prepare('UPDATE inverters SET name=?, full_url=?, live_url=?, api_path=?, color=?, price_mode=?, fixed_price_ct=? WHERE id=?').run(
       name,
       d.get('full_url')?.toString().trim() || null,
+      d.get('live_url')?.toString().trim() || null,
       d.get('api_path')?.toString().trim() || '',
       d.get('color')?.toString().trim() || '#3498db',
       priceMode === 'global' ? null : priceMode,
@@ -47,9 +48,10 @@ export const actions = {
     const name = d.get('name')?.toString().trim();
     if (!name) return fail(400, { error: 'Name required' });
     try {
-      db.prepare('INSERT INTO inverters (name, full_url, api_path, color, enabled) VALUES (?,?,?,?,1)').run(
+      db.prepare('INSERT INTO inverters (name, full_url, live_url, api_path, color, enabled) VALUES (?,?,?,?,?,1)').run(
         name,
         d.get('full_url')?.toString().trim() || null,
+        d.get('live_url')?.toString().trim() || null,
         d.get('api_path')?.toString().trim() || '',
         d.get('color')?.toString().trim() || '#3498db'
       );

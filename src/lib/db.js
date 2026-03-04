@@ -138,6 +138,8 @@ if (!invCols.includes('price_mode'))
   db.exec('ALTER TABLE inverters ADD COLUMN price_mode TEXT');
 if (!invCols.includes('fixed_price_ct'))
   db.exec('ALTER TABLE inverters ADD COLUMN fixed_price_ct REAL');
+if (!invCols.includes('live_url'))
+  db.exec('ALTER TABLE inverters ADD COLUMN live_url TEXT');
 
 const dailyCols = db.prepare('PRAGMA table_info(bkw_daily)').all().map(c => c.name);
 if (!dailyCols.includes('savings_eur'))

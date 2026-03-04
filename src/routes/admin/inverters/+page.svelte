@@ -121,23 +121,48 @@
   <div class="card-body">
     <div class="text-muted small mb-2">
       <i class="bi bi-link-45deg"></i>
-      Resolved: <code>{resolveUrl(inv)}</code>
+      Data URL: <code>{resolveUrl(inv)}</code>
     </div>
     <form method="POST" action="?/update">
       <input type="hidden" name="id" value={inv.id} />
       <div class="row g-2 mb-2">
-        <div class="col-12 col-md-4">
+        <div class="col-12 col-md-2">
           <label class="form-label form-label-sm" for="inv-name-{inv.id}">Name</label>
           <input id="inv-name-{inv.id}" name="name" class="form-control form-control-sm" value={inv.name} required />
         </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label form-label-sm" for="inv-url-{inv.id}">Full URL <span class="text-muted">(optional override)</span></label>
-          <input id="inv-url-{inv.id}" name="full_url" class="form-control form-control-sm"
-                 placeholder="http://192.168.1.x/api/livedata/status"
+        <div class="col-6 col-md-1">
+          <label class="form-label form-label-sm" for="inv-color-{inv.id}">Color</label>
+          <input id="inv-color-{inv.id}" name="color" type="color" class="form-control form-control-sm form-control-color"
+                 value={inv.color || '#3498db'} />
+        </div>
+      </div>
+      <!-- URL configuration -->
+      <div class="row g-2 mb-2 align-items-end border-top pt-2 mt-1">
+        <div class="col-12">
+          <small class="text-muted fw-semibold"><i class="bi bi-link-45deg me-1"></i>URLs</small>
+        </div>
+        <div class="col-12 col-md-5">
+          <label class="form-label form-label-sm" for="inv-dataurl-{inv.id}">
+            Data URL
+            <span class="text-muted">(full data + Tagesertrag)</span>
+          </label>
+          <input id="inv-dataurl-{inv.id}" name="full_url" class="form-control form-control-sm"
+                 placeholder="https://…/opendtu_erwin/"
                  value={inv.full_url || ''} />
+          <small class="text-muted">Leer = Base URL + Nginx Path</small>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label form-label-sm" for="inv-liveurl-{inv.id}">
+            Live URL
+            <span class="text-muted">(Momentanwerte)</span>
+          </label>
+          <input id="inv-liveurl-{inv.id}" name="live_url" class="form-control form-control-sm"
+                 placeholder="https://…/opendtu_erwin/api/livedata"
+                 value={inv.live_url || ''} />
+          <small class="text-muted">Optional – nutzt Data URL als Fallback</small>
         </div>
         <div class="col-12 col-md-3">
-          <label class="form-label form-label-sm" for="inv-path-{inv.id}">Nginx Path</label>
+          <label class="form-label form-label-sm" for="inv-path-{inv.id}">Nginx Path (Fallback)</label>
           <div class="input-group input-group-sm">
             <span class="input-group-text text-muted small" style="font-size:.7rem">
               {(settings.api_base_url||'').replace(/\/$/,'')}/
@@ -145,11 +170,6 @@
             <input id="inv-path-{inv.id}" name="api_path" class="form-control form-control-sm"
                    placeholder="opendtu_erwin/" value={inv.api_path || ''} />
           </div>
-        </div>
-        <div class="col-6 col-md-1">
-          <label class="form-label form-label-sm" for="inv-color-{inv.id}">Color</label>
-          <input id="inv-color-{inv.id}" name="color" type="color" class="form-control form-control-sm form-control-color"
-                 value={inv.color || '#3498db'} />
         </div>
       </div>
       <!-- Per-inverter tariff -->
@@ -226,23 +246,30 @@
   <div class="card-body">
     <form method="POST" action="?/add">
       <div class="row g-2 mb-2">
-        <div class="col-12 col-md-3">
+        <div class="col-12 col-md-2">
           <label class="form-label form-label-sm" for="add-name">Name *</label>
           <input id="add-name" name="name" class="form-control form-control-sm" placeholder="e.g. Dach" required />
         </div>
         <div class="col-12 col-md-4">
-          <label class="form-label form-label-sm" for="add-url">Full URL</label>
+          <label class="form-label form-label-sm" for="add-url">Data URL</label>
           <input id="add-url" name="full_url" class="form-control form-control-sm"
-                 placeholder="http://192.168.1.x/api/livedata/status" />
+                 placeholder="https://…/opendtu_dach/" />
         </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label form-label-sm" for="add-path">Nginx Path</label>
-          <input id="add-path" name="api_path" class="form-control form-control-sm" placeholder="opendtu_dach/" />
+        <div class="col-12 col-md-4">
+          <label class="form-label form-label-sm" for="add-liveurl">Live URL</label>
+          <input id="add-liveurl" name="live_url" class="form-control form-control-sm"
+                 placeholder="https://…/opendtu_dach/api/livedata" />
         </div>
         <div class="col-6 col-md-1">
           <label class="form-label form-label-sm" for="add-color">Color</label>
           <input id="add-color" name="color" type="color" class="form-control form-control-sm form-control-color"
                  value="#9b59b6" />
+        </div>
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-12 col-md-4">
+          <label class="form-label form-label-sm" for="add-path">Nginx Path (Fallback, wenn Data URL leer)</label>
+          <input id="add-path" name="api_path" class="form-control form-control-sm" placeholder="opendtu_dach/" />
         </div>
       </div>
       <button class="btn btn-success btn-sm">

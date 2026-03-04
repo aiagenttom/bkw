@@ -40,7 +40,18 @@ function parseInverterData(inv) {
   };
 }
 
-export async function syncInverter(inverterName, apiPath, baseUrl, fullUrl) {
+async function fetchInverterJson(url) {
+  try {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+  } catch (err) {
+    console.warn(`[sync] fetch ${url}: ${err.message}`);
+    return null;
+  }
+}
+
+export async function syncInverter(inverterName, apiPath, baseUrl, fullUrl, liveUrl) {
   const safeId = inverterName.toLowerCase().replace(/[^a-z0-9]/g, '_');
   const table  = `sync_live_dtu_${safeId}`;
 
@@ -53,34 +64,39 @@ export async function syncInverter(inverterName, apiPath, baseUrl, fullUrl) {
     producing INTEGER, reachable INTEGER
   )`);
 
-  const url = resolveUrl(baseUrl, apiPath, fullUrl);
-  console.log(`[sync] ${inverterName} → ${url}`);
+  // Data URL: full details (AC + DC strings + INV totals) → bkw_history
+  const dataUrl = resolveUrl(baseUrl, apiPath, fullUrl);
+  console.log(`[sync] ${inverterName} data → ${dataUrl}`);
+  const dataJson = await fetchInverterJson(dataUrl);
+  if (!dataJson) return null;
 
-  let json;
-  try {
-    const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    json = await resp.json();
-  } catch (err) {
-    console.warn(`[sync] ${inverterName}: ${err.message}`);
-    return null;
+  const dataInverters = dataJson.inverters ?? (Array.isArray(dataJson) ? dataJson : [dataJson]);
+  if (!dataInverters.length) return null;
+  const p = parseInverterData(dataInverters[0]);
+
+  // Live URL (optional): instantaneous values → live cards
+  // Falls back to data URL result if not configured or returns no inverters
+  let liveP = p;
+  if (liveUrl?.trim()) {
+    console.log(`[sync] ${inverterName} live  → ${liveUrl}`);
+    const liveJson    = await fetchInverterJson(liveUrl);
+    const liveInvs    = liveJson?.inverters ?? [];
+    if (liveInvs.length) liveP = parseInverterData(liveInvs[0]);
   }
 
-  const inverters = json.inverters ?? (Array.isArray(json) ? json : [json]);
-  if (!inverters.length) return null;
-
-  const p   = parseInverterData(inverters[0]);
   const now = new Date().toISOString().replace('T',' ').substring(0,19);
 
   db.exec('BEGIN');
+  // Live table gets liveP (from live URL when available, otherwise same as data)
   db.prepare(`INSERT INTO ${table}
     (synced_at, serial, name, power_ac, current_ac, voltage_ac, frequency,
      power_factor, reactive_power, power_dc, current_dc, voltage_dc,
      yield_day, yield_total, temperature, efficiency, producing, reachable)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      now, p.serial, p.name, p.power_ac, p.current_ac, p.voltage_ac, p.frequency,
-      p.power_factor, p.reactive_power, p.power_dc, p.current_dc, p.voltage_dc,
-      p.yield_day, p.yield_total, p.temperature, p.efficiency, p.producing, p.reachable);
+      now, liveP.serial, liveP.name, liveP.power_ac, liveP.current_ac, liveP.voltage_ac,
+      liveP.frequency, liveP.power_factor, liveP.reactive_power, liveP.power_dc,
+      liveP.current_dc, liveP.voltage_dc, liveP.yield_day, liveP.yield_total,
+      liveP.temperature, liveP.efficiency, liveP.producing, liveP.reachable);
   db.prepare(`DELETE FROM ${table} WHERE id NOT IN
     (SELECT id FROM ${table} ORDER BY synced_at DESC LIMIT 60)`).run();
   db.prepare(`INSERT INTO bkw_history
@@ -91,8 +107,8 @@ export async function syncInverter(inverterName, apiPath, baseUrl, fullUrl) {
       p.power_ac, p.voltage_ac, p.frequency, p.power_factor, p.yield_day, p.yield_total);
   db.exec('COMMIT');
 
-  console.log(`[sync] ${inverterName}: ${p.power_ac}W AC`);
-  return p;
+  console.log(`[sync] ${inverterName}: ${liveP.power_ac}W AC`);
+  return liveP;
 }
 
 export async function syncAll() {
@@ -106,7 +122,7 @@ export async function syncAll() {
   let ok = 0, err = 0;
   for (const inv of inverters) {
     try {
-      const r = await syncInverter(inv.name, inv.api_path, baseUrl, inv.full_url);
+      const r = await syncInverter(inv.name, inv.api_path, baseUrl, inv.full_url, inv.live_url);
       if (r) {
         ok++;
         db.prepare(`INSERT INTO automation_msg_log (log_id, message, message_type, pk_value) VALUES (?,?,'INFO',?)`)

@@ -72,17 +72,81 @@
       const names = Object.keys(g);
       const labels = (g[names[0]] || []).map(r => r.log_time);
 
+      const ptRadius = labels.length > 60 ? 0 : 2;
+
       const ds = (key, fill = true) => names.map(n => ({
         label: n, fill,
         data: (g[n]||[]).map(r => r[key]),
         borderColor: COLORS[n]?.border || '#888',
         backgroundColor: fill ? (COLORS[n]?.bg || 'rgba(0,0,0,.1)') : 'transparent',
-        borderWidth: 2, pointRadius: labels.length > 60 ? 0 : 2, tension: 0.3,
+        borderWidth: 2, pointRadius: ptRadius, tension: 0.3,
       }));
 
-      if (charts.power)   { charts.power.data   = { labels, datasets: ds('power_dc_v') };         charts.power.update('none'); }
+      // Build per-MPPT-string datasets for power & current charts
+      // Each inverter with dc_strings gets separate lines per string + a total line
+      const dsDcPower = [];
+      const dsDcCurrent = [];
+      for (const n of names) {
+        const rows = g[n] || [];
+        const color = COLORS[n]?.border || '#888';
+        // Check if any row has dc_strings data
+        const hasDcStrings = rows.some(r => r.dc_strings);
+        if (hasDcStrings) {
+          // Parse dc_strings from first row that has it to get string names
+          const sample = JSON.parse(rows.find(r => r.dc_strings)?.dc_strings || '[]');
+          // Per-string lines
+          sample.forEach((s, idx) => {
+            const alpha = 0.6 + idx * 0.15;
+            dsDcPower.push({
+              label: `${n} – ${s.name}`, fill: false,
+              data: rows.map(r => { const ds = r.dc_strings ? JSON.parse(r.dc_strings) : []; return ds[idx]?.power ?? null; }),
+              borderColor: COLORS[n]?.border || '#888',
+              borderDash: [4, 2],
+              borderWidth: 1.5, pointRadius: ptRadius, tension: 0.3,
+              backgroundColor: 'transparent',
+            });
+            dsDcCurrent.push({
+              label: `${n} – ${s.name}`, fill: false,
+              data: rows.map(r => { const ds = r.dc_strings ? JSON.parse(r.dc_strings) : []; return ds[idx]?.current ?? null; }),
+              borderColor: COLORS[n]?.border || '#888',
+              borderDash: [4, 2],
+              borderWidth: 1.5, pointRadius: ptRadius, tension: 0.3,
+              backgroundColor: 'transparent',
+            });
+          });
+          // Total line (solid)
+          dsDcPower.push({
+            label: `${n} (Gesamt)`, fill: true,
+            data: rows.map(r => r.power_dc_v),
+            borderColor: color, backgroundColor: COLORS[n]?.bg || 'rgba(0,0,0,.1)',
+            borderWidth: 2, pointRadius: ptRadius, tension: 0.3,
+          });
+          dsDcCurrent.push({
+            label: `${n} (Gesamt)`, fill: false,
+            data: rows.map(r => r.current_v),
+            borderColor: color, backgroundColor: 'transparent',
+            borderWidth: 2, pointRadius: ptRadius, tension: 0.3,
+          });
+        } else {
+          // No DC strings — single line
+          dsDcPower.push({
+            label: n, fill: true,
+            data: rows.map(r => r.power_dc_v),
+            borderColor: color, backgroundColor: COLORS[n]?.bg || 'rgba(0,0,0,.1)',
+            borderWidth: 2, pointRadius: ptRadius, tension: 0.3,
+          });
+          dsDcCurrent.push({
+            label: n, fill: false,
+            data: rows.map(r => r.current_v),
+            borderColor: color, backgroundColor: 'transparent',
+            borderWidth: 2, pointRadius: ptRadius, tension: 0.3,
+          });
+        }
+      }
+
+      if (charts.power)   { charts.power.data   = { labels, datasets: dsDcPower };                charts.power.update('none'); }
       if (charts.temp)     { charts.temp.data    = { labels, datasets: ds('temperature_v', false) }; charts.temp.update('none'); }
-      if (charts.current)  { charts.current.data = { labels, datasets: ds('current_v', false) };    charts.current.update('none'); }
+      if (charts.current)  { charts.current.data = { labels, datasets: dsDcCurrent };               charts.current.update('none'); }
       if (charts.voltage)  { charts.voltage.data = { labels, datasets: ds('voltage_ac_v', false) }; charts.voltage.update('none'); }
       lastUpdate = 'Updated ' + new Date().toLocaleTimeString();
 

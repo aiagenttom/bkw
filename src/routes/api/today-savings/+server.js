@@ -11,6 +11,8 @@ export function GET() {
   const inverters  = db.prepare('SELECT * FROM inverters WHERE enabled = 1').all();
   const globalMode = settings.price_mode ?? 'fixed';
   const globalFixed = parseFloat(settings.fixed_price_ct ?? '30');
+  const mwstPct    = parseFloat(settings.mwst_percent ?? '0');
+  const netzCt     = parseFloat(settings.netzgebuehr_ct ?? '0');
 
   const savings = {};
   for (const inv of inverters) {
@@ -38,7 +40,8 @@ export function GET() {
       priceCt = row?.avg_ct ?? fixedCt;
     }
 
-    savings[inv.name] = parseFloat((yieldWh / 1000 * priceCt / 100).toFixed(4));
+    const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
+    savings[inv.name] = parseFloat((yieldWh / 1000 * totalCtPerKwh / 100).toFixed(4));
   }
 
   return json({ success: true, data: savings });

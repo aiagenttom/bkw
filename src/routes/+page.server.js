@@ -38,6 +38,8 @@ export async function load() {
   const tzOffset  = parseInt(settings.tz_offset_h ?? '1');
   const globalMode  = settings.price_mode ?? 'fixed';
   const globalFixed = parseFloat(settings.fixed_price_ct ?? '30');
+  const mwstPct     = parseFloat(settings.mwst_percent ?? '0');
+  const netzCt      = parseFloat(settings.netzgebuehr_ct ?? '0');
 
   const todaySavings = {};
   for (const inv of inverters) {
@@ -61,7 +63,8 @@ export async function load() {
       priceCt = row?.avg_ct ?? fixedCt;
     }
 
-    todaySavings[inv.name] = parseFloat((yieldWh / 1000 * priceCt / 100).toFixed(4));
+    const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
+    todaySavings[inv.name] = parseFloat((yieldWh / 1000 * totalCtPerKwh / 100).toFixed(4));
   }
 
   return { inverters, summary, liveData, settings, today, todaySavings };

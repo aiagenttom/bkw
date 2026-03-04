@@ -168,7 +168,13 @@
 <!-- Actions -->
 <div class="d-flex gap-2 flex-wrap mb-4">
   <!-- Save -->
-  <form method="POST" action="?/saveProfile" use:enhance>
+  <form method="POST" action="?/saveProfile" use:enhance={({ formData }) => {
+    formData.set('inverter_id', String(selInvId));
+    formData.set('data', JSON.stringify(editData[selInvId] || {}));
+    return async ({ result, update }) => {
+      await update();
+    };
+  }}>
     <input type="hidden" name="inverter_id" value={selInvId} />
     <input type="hidden" name="data" value={JSON.stringify(editData[selInvId] || {})} />
     <button class="btn btn-primary btn-sm" disabled={!dirty}>

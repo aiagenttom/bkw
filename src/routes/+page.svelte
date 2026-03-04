@@ -70,7 +70,13 @@
 
       const g = json.data;
       const names = Object.keys(g);
-      const labels = (g[names[0]] || []).map(r => r.log_time);
+      // Convert UTC log_time to local time for display
+      const tzH = parseInt(settings.tz_offset_h ?? '1');
+      const labels = (g[names[0]] || []).map(r => {
+        const d = new Date(r.log_time.replace(' ', 'T') + 'Z');
+        d.setHours(d.getHours() + tzH);
+        return d.toISOString().replace('T', ' ').substring(0, 19);
+      });
 
       const ptRadius = labels.length > 60 ? 0 : 2;
 

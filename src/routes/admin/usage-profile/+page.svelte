@@ -4,7 +4,7 @@
 
   let { inverters, profiles } = data;
   const dayNames = ['Mo','Di','Mi','Do','Fr','Sa','So'];
-  const maxKw = 5;
+  const maxKw = 2;
   const barHeight = 180; // px
 
   // State

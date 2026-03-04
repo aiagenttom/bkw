@@ -239,6 +239,14 @@
   let showPriceChart = false;
 
   function fmt(v, d = 1) { return v != null ? v.toFixed(d) : '–'; }
+
+  /** Convert UTC datetime string to local time display (HH:MM:SS) */
+  function toLocalTime(utcStr) {
+    if (!utcStr) return '';
+    const tz = settings.timezone || 'Europe/Vienna';
+    const d = new Date(utcStr.replace(' ', 'T') + (utcStr.includes('Z') ? '' : 'Z'));
+    return d.toLocaleTimeString('de-AT', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
 </script>
 
 <svelte:head>
@@ -316,7 +324,7 @@
           </span>
         </div>
         {#if d.synced_at}
-          <div class="text-muted mt-1" style="font-size:.7rem">Synced: {d.synced_at}</div>
+          <div class="text-muted mt-1" style="font-size:.7rem">Synced: {toLocalTime(d.synced_at)}</div>
         {/if}
       </div>
     </div>

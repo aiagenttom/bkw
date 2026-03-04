@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   export let data;
 
   const { inverters, summary, settings, today } = data;
@@ -9,6 +9,7 @@
   let selDate   = today;
   let lastUpdate = '';
   let timer;
+  let summaryData = data.summary;
 
   // Dynamic colors from DB (with alpha variant for chart fill)
   function hexToRgba(hex, alpha = 0.15) {
@@ -24,13 +25,9 @@
     }])
   );
 
-  function color(name) {
-    return COLORS[name]?.border ?? '#888';
-  }
-
   // Filtered inverter list for display
-  $: visibleInverters = selInv === 'all' ? inverters : inverters.filter(i => i.name === selInv);
-  $: visibleSummary   = selInv === 'all' ? summary   : summary.filter(s => s.name === selInv);
+  $: visibleInverters = selInv === 'all' ? inverters       : inverters.filter(i => i.name === selInv);
+  $: visibleSummary   = selInv === 'all' ? summaryData : summaryData.filter(s => s.name === selInv);
 
   let charts = {};
 
@@ -55,21 +52,6 @@
     charts.temp    = new Chart(document.getElementById('cTemp'),    { type: 'line', data: { labels: [], datasets: [] }, options: opts('°C', false) });
     charts.current = new Chart(document.getElementById('cCurrent'), { type: 'line', data: { labels: [], datasets: [] }, options: opts('Ampere (A)') });
     charts.voltage = new Chart(document.getElementById('cVoltage'), { type: 'line', data: { labels: [], datasets: [] }, options: opts('Voltage (V)', false) });
-    charts.price   = new Chart(document.getElementById('cPrice'),   {
-      type: 'line',
-      data: { labels: [], datasets: [] },
-      options: {
-        ...opts('ct/kWh', false),
-        plugins: {
-          ...opts('ct/kWh', false).plugins,
-          tooltip: { callbacks: { title: items => items[0]?.label + ':00' || '' } },
-        },
-        scales: {
-          x: { ticks: { callback(v) { return this.getLabelForValue(v) + ':00'; } } },
-          y: { beginAtZero: false, title: { display: true, text: 'ct/kWh', font: { size: 11 } } },
-        },
-      },
-    });
 
     await fetchData();
     const secs = parseInt(settings.auto_refresh_s || 30);
@@ -99,13 +81,19 @@
     charts.temp.data    = { labels, datasets: ds('temperature_v', false) };
     charts.current.data = { labels, datasets: ds('current_v', false) };
     charts.voltage.data = { labels, datasets: ds('voltage_ac_v', false) };
-    Object.values(charts).forEach(c => c.update('none'));
-
-    // History table
-    const allRows = names.flatMap(n => g[n] || [])
-      .sort((a,b) => b.log_time.localeCompare(a.log_time)).slice(0, 100);
-    histRows = allRows;
+    ['power','temp','current','voltage'].forEach(k => charts[k]?.update('none'));
     lastUpdate = 'Updated ' + new Date().toLocaleTimeString();
+
+    // Recompute summary stats from fetched data (so they update when date changes)
+    summaryData = names.map(n => {
+      const rows = g[n] || [];
+      const powers = rows.map(r => r.power_dc_v).filter(v => v != null);
+      return {
+        name: n,
+        peak_power: powers.length ? parseFloat(Math.max(...powers).toFixed(1)) : null,
+        avg_power:  powers.length ? parseFloat((powers.reduce((a,b) => a+b, 0) / powers.length).toFixed(1)) : null,
+      };
+    });
 
     // Refresh live data + savings
     const live = await fetch('/api/live');
@@ -121,6 +109,25 @@
     const priceR = await fetch(`/api/prices?date=${selDate}`);
     const priceJ = await priceR.json();
     if (priceJ.success && priceJ.data.length) {
+      showPriceChart = true;
+      await tick(); // ensure cPrice canvas is visible before Chart.js init
+      if (!charts.price) {
+        const priceOpts = {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+            tooltip: { callbacks: { title: items => items[0]?.label + ':00' || '' } },
+          },
+          scales: {
+            x: { ticks: { callback(v) { return this.getLabelForValue(v) + ':00'; } } },
+            y: { beginAtZero: false, title: { display: true, text: 'ct/kWh', font: { size: 11 } } },
+          },
+        };
+        charts.price = new Chart(document.getElementById('cPrice'), {
+          type: 'line', data: { labels: [], datasets: [] }, options: priceOpts,
+        });
+      }
       const priceLabels = priceJ.data.map(r => String(r.hour).padStart(2, '0'));
       charts.price.data = {
         labels: priceLabels,
@@ -133,13 +140,11 @@
         }],
       };
       charts.price.update('none');
-      showPriceChart = true;
     } else {
       showPriceChart = false;
     }
   }
 
-  let histRows = [];
   let showPriceChart = false;
 
   function fmt(v, d = 1) { return v != null ? v.toFixed(d) : '–'; }
@@ -297,45 +302,6 @@
         <span class="badge bg-warning text-dark ms-2" style="font-size:.7rem">ct/kWh</span>
       </div>
       <div class="card-body"><canvas id="cPrice" style="max-height:200px"></canvas></div>
-    </div>
-  </div>
-</div>
-
-<!-- History table -->
-<div class="card shadow-sm mb-4">
-  <div class="card-header fw-semibold d-flex justify-content-between">
-    <span><i class="bi bi-table me-2"></i>Historical Readings</span>
-    <small class="text-muted">Last 100 rows</small>
-  </div>
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0 small">
-        <thead class="table-dark">
-          <tr>
-            <th>Time</th><th>Inverter</th><th>Power DC (W)</th>
-            <th>Power AC (W)</th><th>Current (A)</th>
-            <th>Temp (°C)</th><th>Voltage AC</th><th>Freq (Hz)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#if histRows.length === 0}
-            <tr><td colspan="8" class="text-center text-muted py-3">Loading…</td></tr>
-          {:else}
-            {#each histRows as r}
-            <tr>
-              <td class="text-muted">{r.log_time?.substring(11,16) || '–'}</td>
-              <td><span class="badge" style="background:{color(r.name)}">{r.name}</span></td>
-              <td>{fmt(r.power_dc_v)}</td>
-              <td>{fmt(r.power_ac_v)}</td>
-              <td>{fmt(r.current_v, 2)}</td>
-              <td>{fmt(r.temperature_v)}</td>
-              <td>{fmt(r.voltage_ac_v)}</td>
-              <td>{fmt(r.frequency_v, 2)}</td>
-            </tr>
-            {/each}
-          {/if}
-        </tbody>
-      </table>
     </div>
   </div>
 </div>

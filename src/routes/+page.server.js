@@ -2,7 +2,12 @@ import db from '$lib/db.js';
 
 export async function load() {
   const inverters = db.prepare('SELECT * FROM inverters WHERE enabled = 1 ORDER BY name').all();
-  const today     = new Date().toISOString().substring(0, 10);
+
+  // Compute local "today" using the configured tz_offset_h setting
+  const tzRow   = db.prepare("SELECT value FROM app_settings WHERE key = 'tz_offset_h'").get();
+  const tzHours = parseInt(tzRow?.value ?? '1');
+  const localNow = new Date(Date.now() + tzHours * 3_600_000);
+  const today   = localNow.toISOString().substring(0, 10);
 
   const summary = db.prepare(`
     SELECT h.name,
@@ -10,9 +15,9 @@ export async function load() {
            ROUND(AVG(h.power_dc_v),1) AS avg_power
     FROM bkw_history h
     JOIN inverters i ON i.name = h.name AND i.enabled = 1
-    WHERE date(h.log_time) = ?
+    WHERE date(datetime(h.log_time, '+' || ? || ' hours')) = ?
     GROUP BY h.name
-  `).all(today);
+  `).all(tzHours, today);
 
   // Live data per inverter (dynamic table lookup)
   const liveData = {};

@@ -30,10 +30,13 @@
   $: visibleSummary   = selInv === 'all' ? summaryData : summaryData.filter(s => s.name === selInv);
 
   let charts = {};
+  let ChartClass; // set in onMount, used by fetchData for lazy price chart
 
   onMount(async () => {
-    const { Chart, registerables } = await import('https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js');
-    Chart.register(...registerables);
+    const mod = await import('https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js');
+    ChartClass = mod.Chart ?? mod.default;
+    const { registerables } = ChartClass;
+    ChartClass.register(...registerables);
 
     const opts = (ylabel, beginZero = true) => ({
       responsive: true, maintainAspectRatio: false,
@@ -48,10 +51,10 @@
       },
     });
 
-    charts.power   = new Chart(document.getElementById('cPower'),   { type: 'line', data: { labels: [], datasets: [] }, options: opts('Watts (W)') });
-    charts.temp    = new Chart(document.getElementById('cTemp'),    { type: 'line', data: { labels: [], datasets: [] }, options: opts('°C', false) });
-    charts.current = new Chart(document.getElementById('cCurrent'), { type: 'line', data: { labels: [], datasets: [] }, options: opts('Ampere (A)') });
-    charts.voltage = new Chart(document.getElementById('cVoltage'), { type: 'line', data: { labels: [], datasets: [] }, options: opts('Voltage (V)', false) });
+    charts.power   = new ChartClass(document.getElementById('cPower'),   { type: 'line', data: { labels: [], datasets: [] }, options: opts('Watts (W)') });
+    charts.temp    = new ChartClass(document.getElementById('cTemp'),    { type: 'line', data: { labels: [], datasets: [] }, options: opts('°C', false) });
+    charts.current = new ChartClass(document.getElementById('cCurrent'), { type: 'line', data: { labels: [], datasets: [] }, options: opts('Ampere (A)') });
+    charts.voltage = new ChartClass(document.getElementById('cVoltage'), { type: 'line', data: { labels: [], datasets: [] }, options: opts('Voltage (V)', false) });
 
     await fetchData();
     const secs = parseInt(settings.auto_refresh_s || 30);
@@ -124,7 +127,7 @@
             y: { beginAtZero: false, title: { display: true, text: 'ct/kWh', font: { size: 11 } } },
           },
         };
-        charts.price = new Chart(document.getElementById('cPrice'), {
+        charts.price = new ChartClass(document.getElementById('cPrice'), {
           type: 'line', data: { labels: [], datasets: [] }, options: priceOpts,
         });
       }

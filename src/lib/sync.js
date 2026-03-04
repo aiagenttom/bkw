@@ -12,19 +12,31 @@ function resolveUrl(baseUrl, apiPath, fullUrl) {
 }
 
 function parseInverterData(inv) {
-  const ac = inv.AC?.['0'] || {};
-  const dc = inv.DC?.['0'] || {};
-  const iv = inv.INV?.['0'] || {};
+  const ac   = inv.AC?.['0']  || {};
+  const iv   = inv.INV?.['0'] || {};
+  // Sum across all MPPT strings for total DC current; use first string voltage as representative
+  const dcKeys = Object.keys(inv.DC || {});
+  const dc0    = inv.DC?.['0'] || {};
+  const totalDcCurrent = dcKeys.reduce((s, k) => s + (inv.DC[k].Current?.v ?? 0), 0) || null;
   return {
-    serial: inv.serial ?? null, name: inv.name ?? null,
-    power_ac: ac.Power?.v ?? null,       current_ac: ac.Current?.v ?? null,
-    voltage_ac: ac.Voltage?.v ?? null,   frequency: ac.Frequency?.v ?? null,
-    power_factor: ac.PowerFactor?.v ?? null, reactive_power: ac.ReactivePower?.v ?? null,
-    power_dc: dc.Power?.v ?? null,       current_dc: dc.Current?.v ?? null,
-    voltage_dc: dc.Voltage?.v ?? null,   yield_day: dc.YieldDay?.v ?? null,
-    yield_total: dc.YieldTotal?.v ?? null, temperature: iv.Temperature?.v ?? null,
-    efficiency: inv.efficiency ?? null,  producing: inv.producing ? 1 : 0,
-    reachable: inv.reachable ? 1 : 0,
+    serial:         inv.serial ?? null,
+    name:           inv.name   ?? null,
+    power_ac:       ac.Power?.v          ?? null,
+    current_ac:     ac.Current?.v        ?? null,
+    voltage_ac:     ac.Voltage?.v        ?? null,
+    frequency:      ac.Frequency?.v      ?? null,
+    power_factor:   ac.PowerFactor?.v    ?? null,
+    reactive_power: ac.ReactivePower?.v  ?? null,
+    // INV['0'] holds the inverter-level totals — use these, not individual MPPT strings
+    power_dc:       iv['Power DC']?.v    ?? null,
+    current_dc:     totalDcCurrent,
+    voltage_dc:     dc0.Voltage?.v       ?? null,
+    yield_day:      iv.YieldDay?.v       ?? null,
+    yield_total:    iv.YieldTotal?.v     ?? null,
+    temperature:    iv.Temperature?.v    ?? null,
+    efficiency:     iv.Efficiency?.v     ?? null,
+    producing:      inv.producing ? 1 : 0,
+    reachable:      inv.reachable ? 1 : 0,
   };
 }
 

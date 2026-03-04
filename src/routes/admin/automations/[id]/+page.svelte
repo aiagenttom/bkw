@@ -1,11 +1,19 @@
-<script>export let data; const { entry, messages } = data;</script>
+<script>
+  export let data;
+  const { entry, messages } = data;
+  function toLocal(utc) {
+    if (!utc) return '–';
+    const d = new Date(utc.replace(' ', 'T') + (utc.includes('Z') ? '' : 'Z'));
+    return d.toLocaleTimeString('de-AT', { timeZone: data.timezone, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+</script>
 <svelte:head><title>Log Messages – BKW</title></svelte:head>
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h4 class="fw-bold mb-0"><i class="bi bi-list-ul me-2"></i>Log Messages</h4>
   <a href="/admin/automations" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
 </div>
 <div class="alert alert-secondary py-2 small mb-3">
-  <strong>{entry.automation_name}</strong> — {entry.started_at} →
+  <strong>{entry.automation_name}</strong> — {toLocal(entry.started_at)} →
   <span class="badge {entry.status==='SUCCESS'?'bg-success':entry.status==='ERROR'?'bg-danger':'bg-secondary'}">{entry.status}</span>
 </div>
 <div class="card shadow-sm">
@@ -15,7 +23,7 @@
       <tbody>
         {#each messages as m}
         <tr>
-          <td class="text-muted">{m.msg_timestamp?.substring(11,19)||'–'}</td>
+          <td class="text-muted">{toLocal(m.msg_timestamp)}</td>
           <td><span class="badge {m.message_type==='ERROR'?'bg-danger':m.message_type==='WARNING'?'bg-warning text-dark':'bg-info text-dark'}">{m.message_type}</span></td>
           <td>{m.message}</td><td class="text-muted">{m.pk_value||'–'}</td>
         </tr>

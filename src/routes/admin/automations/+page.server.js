@@ -6,5 +6,6 @@ export async function load() {
            (SELECT COUNT(*) FROM automation_msg_log WHERE log_id = automation_log.id) AS msg_count
     FROM automation_log ORDER BY started_at DESC LIMIT 100
   `).all();
-  return { logs };
+  const timezone = db.prepare("SELECT value FROM app_settings WHERE key = 'timezone'").get()?.value || 'Europe/Vienna';
+  return { logs, timezone };
 }

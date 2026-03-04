@@ -6,5 +6,6 @@ export async function load({ url }) {
     FROM activity_log WHERE created_at >= datetime('now', '-' || ? || ' days')
     ORDER BY created_at DESC LIMIT 500
   `).all(tf);
-  return { views, tf };
+  const timezone = db.prepare("SELECT value FROM app_settings WHERE key = 'timezone'").get()?.value || 'Europe/Vienna';
+  return { views, tf, timezone };
 }

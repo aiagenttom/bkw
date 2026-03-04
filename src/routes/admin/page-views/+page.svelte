@@ -1,4 +1,11 @@
-<script>export let data; const { views, tf } = data;</script>
+<script>
+  export let data; const { views, tf } = data;
+  function toLocal(utc) {
+    if (!utc) return '–';
+    const d = new Date(utc.replace(' ', 'T') + (utc.includes('Z') ? '' : 'Z'));
+    return d.toLocaleTimeString('de-AT', { timeZone: data.timezone, hour: '2-digit', minute: '2-digit' });
+  }
+</script>
 <svelte:head><title>Page Views – BKW</title></svelte:head>
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h4 class="fw-bold mb-0"><i class="bi bi-eye me-2"></i>Page Views</h4>
@@ -15,7 +22,7 @@
         <tbody>
           {#each views as v}
           <tr>
-            <td class="text-muted">{v.created_at?.substring(11,16)||'–'}</td>
+            <td class="text-muted">{toLocal(v.created_at)}</td>
             <td>{v.username||'–'}</td><td>{v.method}</td><td>{v.page_path}</td>
             <td><span class="badge {v.status_code>=400?'bg-danger':'bg-success'}">{v.status_code}</span></td>
             <td>{v.elapsed_ms}</td>

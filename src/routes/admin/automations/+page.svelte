@@ -1,4 +1,11 @@
-<script>export let data;</script>
+<script>
+  export let data;
+  function toLocal(utc) {
+    if (!utc) return '–';
+    const d = new Date(utc.replace(' ', 'T') + (utc.includes('Z') ? '' : 'Z'));
+    return d.toLocaleTimeString('de-AT', { timeZone: data.timezone, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+</script>
 <svelte:head><title>Automations – BKW</title></svelte:head>
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h4 class="fw-bold mb-0"><i class="bi bi-arrow-repeat me-2"></i>Automations Log</h4>
@@ -12,8 +19,8 @@
         {#each data.logs as l}
         <tr>
           <td class="fw-semibold">{l.automation_name}</td>
-          <td class="text-muted">{l.started_at?.substring(11,19)||'–'}</td>
-          <td class="text-muted">{l.ended_at?.substring(11,19)||'–'}</td>
+          <td class="text-muted">{toLocal(l.started_at)}</td>
+          <td class="text-muted">{toLocal(l.ended_at)}</td>
           <td><span class="badge {l.status==='SUCCESS'?'bg-success':l.status==='ERROR'?'bg-danger':'bg-secondary'}">{l.status}</span></td>
           <td class="text-success">{l.successful_rows}</td>
           <td class="text-danger">{l.error_rows}</td>

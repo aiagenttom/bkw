@@ -23,6 +23,10 @@
     goto(`/history?months=${selMonths}`);
   }
 
+  // Inverter filter (client-side)
+  let selInv = 'all';
+  $: filteredInverters = selInv === 'all' ? inverters : inverters.filter(i => i.name === selInv);
+
   // Whether to show savings chart
   const hasSavings = Object.values(byDate).some(d => d.savings_eur > 0);
 
@@ -38,15 +42,15 @@
   function fmtEur(v) { return v != null && v > 0 ? '€\u202f' + v.toFixed(2) : '–'; }
 
   let charts = {};
+  let ChartClass;
 
-  onMount(async () => {
-    const { Chart, registerables } = await import('chart.js');
-    Chart.register(...registerables);
-
+  function updateCharts() {
+    if (!ChartClass) return;
     const labels = dateSet;
+    const invs = filteredInverters;
 
-    // ── Yield per inverter (stacked bar) ──────────────────────────────────────
-    const yieldDatasets = inverters.map(inv => ({
+    // ── Yield datasets ───────────────────────────────────────────────────────
+    const yieldDatasets = invs.map(inv => ({
       label: inv.name,
       data:  labels.map(d => {
         const wh = byInverter[inv.name]?.[d]?.yield_wh ?? 0;
@@ -54,42 +58,15 @@
       }),
       backgroundColor: INV_COLORS[inv.name]?.fill || '#888',
       borderColor:     INV_COLORS[inv.name]?.solid || '#888',
-      borderWidth: 1,
-      borderRadius: 2,
+      borderWidth: 1, borderRadius: 2,
     }));
+    if (charts.yield) {
+      charts.yield.data = { labels, datasets: yieldDatasets };
+      charts.yield.update('none');
+    }
 
-    charts.yield = new Chart(document.getElementById('cYield'), {
-      type: 'bar',
-      data: { labels, datasets: yieldDatasets },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
-          tooltip: {
-            callbacks: {
-              label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(2) ?? 0} kWh`,
-              footer: items => {
-                const total = items.reduce((s, i) => s + (i.parsed.y || 0), 0);
-                return `Gesamt: ${total.toFixed(2)} kWh`;
-              },
-            },
-          },
-        },
-        scales: {
-          x: {
-            stacked: true,
-            ticks: { maxTicksLimit: 20, maxRotation: 45, font: { size: 10 } },
-          },
-          y: {
-            stacked: true, beginAtZero: true,
-            title: { display: true, text: 'kWh', font: { size: 11 } },
-          },
-        },
-      },
-    });
-
-    // ── Monthly yield bar chart ────────────────────────────────────────────────
-    const monthDatasets = inverters.map(inv => ({
+    // ── Monthly yield datasets ───────────────────────────────────────────────
+    const monthDatasets = invs.map(inv => ({
       label: inv.name,
       data:  monthKeys.map(m => {
         const wh = monthByInv[m]?.[inv.name]?.total_wh ?? 0;
@@ -97,40 +74,16 @@
       }),
       backgroundColor: INV_COLORS[inv.name]?.fill || '#888',
       borderColor:     INV_COLORS[inv.name]?.solid || '#888',
-      borderWidth: 1,
-      borderRadius: 3,
+      borderWidth: 1, borderRadius: 3,
     }));
+    if (charts.monthly) {
+      charts.monthly.data = { labels: monthKeys, datasets: monthDatasets };
+      charts.monthly.update('none');
+    }
 
-    charts.monthly = new Chart(document.getElementById('cMonthly'), {
-      type: 'bar',
-      data: { labels: monthKeys, datasets: monthDatasets },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
-          tooltip: {
-            callbacks: {
-              label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(2) ?? 0} kWh`,
-              footer: items => {
-                const total = items.reduce((s, i) => s + (i.parsed.y || 0), 0);
-                return `Gesamt: ${total.toFixed(2)} kWh`;
-              },
-            },
-          },
-        },
-        scales: {
-          x: { stacked: true },
-          y: {
-            stacked: true, beginAtZero: true,
-            title: { display: true, text: 'kWh', font: { size: 11 } },
-          },
-        },
-      },
-    });
-
-    // ── Savings bar chart (only if data exists) ───────────────────────────────
-    if (hasSavings && document.getElementById('cSavings')) {
-      const savingsDatasets = inverters.map(inv => ({
+    // ── Savings datasets ─────────────────────────────────────────────────────
+    if (charts.savings) {
+      const savingsDatasets = invs.map(inv => ({
         label: inv.name,
         data:  labels.map(d => {
           const s = byInverter[inv.name]?.[d]?.savings_eur ?? 0;
@@ -138,37 +91,57 @@
         }),
         backgroundColor: INV_COLORS[inv.name]?.fill || '#888',
         borderColor:     INV_COLORS[inv.name]?.solid || '#888',
-        borderWidth: 1,
-        borderRadius: 2,
+        borderWidth: 1, borderRadius: 2,
       }));
+      charts.savings.data = { labels, datasets: savingsDatasets };
+      charts.savings.update('none');
+    }
+  }
 
-      charts.savings = new Chart(document.getElementById('cSavings'), {
-        type: 'bar',
-        data: { labels, datasets: savingsDatasets },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: {
-            legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
-            tooltip: {
-              callbacks: {
-                label: ctx => `${ctx.dataset.label}: €\u202f${ctx.parsed.y?.toFixed(2) ?? 0}`,
-                footer: items => {
-                  const total = items.reduce((s, i) => s + (i.parsed.y || 0), 0);
-                  return `Gesamt: €\u202f${total.toFixed(2)}`;
-                },
-              },
-            },
-          },
-          scales: {
-            x: { stacked: true, ticks: { maxTicksLimit: 20, maxRotation: 45, font: { size: 10 } } },
-            y: {
-              stacked: true, beginAtZero: true,
-              title: { display: true, text: '€', font: { size: 11 } },
+  // React to inverter filter changes
+  $: if (selInv && ChartClass) updateCharts();
+
+  onMount(async () => {
+    const { Chart, registerables } = await import('chart.js');
+    Chart.register(...registerables);
+    ChartClass = Chart;
+
+    const labels = dateSet;
+    const stackedBarOpts = (ylabel) => ({
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(2) ?? 0} ${ylabel}`,
+            footer: items => {
+              const total = items.reduce((s, i) => s + (i.parsed.y || 0), 0);
+              return `Gesamt: ${total.toFixed(2)} ${ylabel}`;
             },
           },
         },
+      },
+      scales: {
+        x: { stacked: true, ticks: { maxTicksLimit: 20, maxRotation: 45, font: { size: 10 } } },
+        y: { stacked: true, beginAtZero: true, title: { display: true, text: ylabel, font: { size: 11 } } },
+      },
+    });
+
+    charts.yield = new Chart(document.getElementById('cYield'), {
+      type: 'bar', data: { labels: [], datasets: [] }, options: stackedBarOpts('kWh'),
+    });
+
+    charts.monthly = new Chart(document.getElementById('cMonthly'), {
+      type: 'bar', data: { labels: [], datasets: [] }, options: stackedBarOpts('kWh'),
+    });
+
+    if (hasSavings && document.getElementById('cSavings')) {
+      charts.savings = new Chart(document.getElementById('cSavings'), {
+        type: 'bar', data: { labels: [], datasets: [] }, options: stackedBarOpts('€'),
       });
     }
+
+    updateCharts();
   });
 
   onDestroy(() => Object.values(charts).forEach(c => c?.destroy()));
@@ -182,8 +155,11 @@
     <h4 class="mb-0 fw-bold"><i class="bi bi-bar-chart-fill text-warning me-2"></i>Tagesverlauf</h4>
     <small class="text-muted">Historische Tagesdaten pro Wechselrichter</small>
   </div>
-  <div class="d-flex gap-2 align-items-center">
-    <label class="text-muted small mb-0" for="history-months">Zeitraum:</label>
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    <select bind:value={selInv} class="form-select form-select-sm" style="width:150px">
+      <option value="all">Alle Wechselrichter</option>
+      {#each inverters as inv}<option value={inv.name}>{inv.name}</option>{/each}
+    </select>
     <select id="history-months" bind:value={selMonths} on:change={changeMonths} class="form-select form-select-sm" style="width:130px">
       <option value={1}>1 Monat</option>
       <option value={3}>3 Monate</option>
@@ -244,24 +220,24 @@
         <thead class="table-dark">
           <tr>
             <th>Monat</th>
-            {#each inverters as inv}
+            {#each filteredInverters as inv}
               <th>{inv.name}</th>
             {/each}
-            <th class="text-warning">Gesamt</th>
+            {#if filteredInverters.length > 1}<th class="text-warning">Gesamt</th>{/if}
             {#if hasSavings}<th class="text-success">Ersparnis</th>{/if}
           </tr>
         </thead>
         <tbody>
           {#each monthKeys.slice().reverse() as month}
           {@const row = monthByInv[month] ?? {}}
-          {@const totalWh  = inverters.reduce((s,i) => s + (row[i.name]?.total_wh  ?? 0), 0)}
-          {@const totalSav = inverters.reduce((s,i) => s + (row[i.name]?.total_savings ?? 0), 0)}
+          {@const totalWh  = filteredInverters.reduce((s,i) => s + (row[i.name]?.total_wh  ?? 0), 0)}
+          {@const totalSav = filteredInverters.reduce((s,i) => s + (row[i.name]?.total_savings ?? 0), 0)}
           <tr>
             <td class="fw-semibold">{month}</td>
-            {#each inverters as inv}
+            {#each filteredInverters as inv}
               <td>{fmtKwh(row[inv.name]?.total_wh)}</td>
             {/each}
-            <td class="fw-bold text-warning">{fmtKwh(totalWh)}</td>
+            {#if filteredInverters.length > 1}<td class="fw-bold text-warning">{fmtKwh(totalWh)}</td>{/if}
             {#if hasSavings}<td class="fw-bold text-success">{fmtEur(totalSav)}</td>{/if}
           </tr>
           {/each}

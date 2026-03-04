@@ -1,4 +1,5 @@
 import db from './db.js';
+import { getTzOffset, getLocalToday } from './tz.js';
 
 function getSetting(key) {
   return db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key)?.value ?? null;
@@ -211,9 +212,8 @@ export function pruneSpottyPrices() {
  * @param {string} [date] - ISO date YYYY-MM-DD, defaults to today
  */
 export function syncDaily(date) {
-  const tzOffset = parseInt(getSetting('tz_offset_h') || '1');
-  const localNow = new Date(Date.now() + tzOffset * 3_600_000);
-  const target = date || localNow.toISOString().substring(0, 10);
+  const target = date || getLocalToday();
+  const tzOffset = getTzOffset(target);
 
   const rows = db.prepare(`
     SELECT

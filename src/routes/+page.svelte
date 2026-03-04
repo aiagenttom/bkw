@@ -70,12 +70,16 @@
 
       const g = json.data;
       const names = Object.keys(g);
-      // Convert UTC log_time to local time for display
-      const tzH = parseInt(settings.tz_offset_h ?? '1');
+      // Convert UTC log_time to local time for display (DST-aware)
+      const tz = settings.timezone || 'Europe/Vienna';
       const labels = (g[names[0]] || []).map(r => {
         const d = new Date(r.log_time.replace(' ', 'T') + 'Z');
-        d.setHours(d.getHours() + tzH);
-        return d.toISOString().replace('T', ' ').substring(0, 19);
+        const parts = new Intl.DateTimeFormat('sv-SE', {
+          timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+        }).formatToParts(d);
+        const v = Object.fromEntries(parts.filter(p => p.type !== 'literal').map(p => [p.type, p.value]));
+        return `${v.year}-${v.month}-${v.day} ${v.hour}:${v.minute}:${v.second}`;
       });
 
       const ptRadius = labels.length > 60 ? 0 : 2;

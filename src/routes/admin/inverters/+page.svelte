@@ -84,14 +84,17 @@
                  value={settings.spotty_url || ''} />
           <small class="text-muted">Used when mode is "Spotty Energie"</small>
         </div>
-        <div class="col-6 col-md-2">
-          <label class="form-label fw-semibold small" for="tz-offset">UTC Offset (h)</label>
-          <div class="input-group input-group-sm">
-            <input id="tz-offset" name="tz_offset_h" type="number" min="-12" max="14" class="form-control form-control-sm"
-                   value={settings.tz_offset_h || '1'} />
-            <span class="input-group-text">h</span>
-          </div>
-          <small class="text-muted">1=CET, 2=CEST</small>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-semibold small" for="timezone">Zeitzone</label>
+          <select id="timezone" name="timezone" class="form-select form-select-sm">
+            <option value="Europe/Vienna"  selected={settings.timezone === 'Europe/Vienna'  || !settings.timezone}>Europe/Vienna</option>
+            <option value="Europe/Berlin"  selected={settings.timezone === 'Europe/Berlin'}>Europe/Berlin</option>
+            <option value="Europe/Zurich"  selected={settings.timezone === 'Europe/Zurich'}>Europe/Zurich</option>
+            <option value="Europe/London"  selected={settings.timezone === 'Europe/London'}>Europe/London</option>
+            <option value="Europe/Rome"    selected={settings.timezone === 'Europe/Rome'}>Europe/Rome</option>
+            <option value="Europe/Paris"   selected={settings.timezone === 'Europe/Paris'}>Europe/Paris</option>
+          </select>
+          <small class="text-muted">Sommer-/Winterzeit automatisch</small>
         </div>
       </div>
 

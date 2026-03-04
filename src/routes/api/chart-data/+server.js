@@ -1,13 +1,11 @@
 import { json } from '@sveltejs/kit';
 import db from '$lib/db.js';
+import { getTzOffset, getLocalToday } from '$lib/tz.js';
 
 export function GET({ url }) {
   const name = url.searchParams.get('name');
-  const tzRow   = db.prepare("SELECT value FROM app_settings WHERE key = 'tz_offset_h'").get();
-  const tzHours = parseInt(tzRow?.value ?? '1');
-  // Default to local today using the same tz offset
-  const localNow = new Date(Date.now() + tzHours * 3_600_000);
-  const date = url.searchParams.get('date') || localNow.toISOString().substring(0, 10);
+  const date = url.searchParams.get('date') || getLocalToday();
+  const tzHours = getTzOffset(date);
 
   // Always restrict to enabled inverters so removed/disabled inverters don't appear
   const activeNames = db.prepare('SELECT name FROM inverters WHERE enabled = 1').all().map(r => r.name);

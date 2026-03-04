@@ -173,6 +173,7 @@ for (const [k, v, l] of [
   ['app_name',       'BKW',                          'Application Name'],
   ['spotty_url',     'https://i.spottyenergie.at/api/prices/CONSUMPTION/1bfac7b4-8406-4f0e-95e2-851e74b89e10', 'Spotty Energie API URL'],
   ['tz_offset_h',    '1',                            'Local UTC offset (hours, e.g. 1 for CET, 2 for CEST)'],
+  ['timezone',       'Europe/Vienna',                'IANA Timezone (für Sommer-/Winterzeit)'],
   ['price_mode',     'fixed',                        'Tariff mode: spotty or fixed'],
   ['fixed_price_ct', '30',                           'Fixed tariff (ct/kWh)'],
   ['mwst_percent',   '20',                           'MwSt (%)'],

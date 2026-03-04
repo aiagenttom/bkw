@@ -1,13 +1,11 @@
 import db from '$lib/db.js';
+import { getTzOffset, getLocalToday } from '$lib/tz.js';
 
 export async function load() {
   const inverters = db.prepare('SELECT * FROM inverters WHERE enabled = 1 ORDER BY name').all();
 
-  // Compute local "today" using the configured tz_offset_h setting
-  const tzRow   = db.prepare("SELECT value FROM app_settings WHERE key = 'tz_offset_h'").get();
-  const tzHours = parseInt(tzRow?.value ?? '1');
-  const localNow = new Date(Date.now() + tzHours * 3_600_000);
-  const today   = localNow.toISOString().substring(0, 10);
+  const today   = getLocalToday();
+  const tzHours = getTzOffset(today);
 
   const summary = db.prepare(`
     SELECT h.name,
@@ -35,7 +33,6 @@ export async function load() {
   );
 
   // Today's savings per inverter (live calculation based on yield_day + tariff)
-  const tzOffset  = parseInt(settings.tz_offset_h ?? '1');
   const globalMode  = settings.price_mode ?? 'fixed';
   const globalFixed = parseFloat(settings.fixed_price_ct ?? '30');
   const mwstPct     = parseFloat(settings.mwst_percent ?? '0');
@@ -59,7 +56,7 @@ export async function load() {
           printf('%02d:00Z', (CAST(strftime('%M', datetime(h.log_time, '-' || ? || ' hours')) AS INTEGER) / 15) * 15)
         )
         WHERE date(datetime(h.log_time, '+' || ? || ' hours')) = ? AND h.name = ? AND h.power_ac_v > 0
-      `).get(tzOffset, tzOffset, tzOffset, today, inv.name);
+      `).get(tzHours, tzHours, tzHours, today, inv.name);
       priceCt = row?.avg_ct ?? fixedCt;
     }
 

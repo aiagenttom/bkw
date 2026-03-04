@@ -1,13 +1,13 @@
 import { json } from '@sveltejs/kit';
 import db from '$lib/db.js';
+import { getTzOffset, getLocalToday } from '$lib/tz.js';
 
 export function GET() {
   const settings = Object.fromEntries(
     db.prepare('SELECT key, value FROM app_settings').all().map(r => [r.key, r.value])
   );
-  const tzOffset   = parseInt(settings.tz_offset_h ?? '1');
-  const localNow   = new Date(Date.now() + tzOffset * 3_600_000);
-  const today      = localNow.toISOString().substring(0, 10);
+  const today      = getLocalToday();
+  const tzOffset   = getTzOffset(today);
   const inverters  = db.prepare('SELECT * FROM inverters WHERE enabled = 1').all();
   const globalMode = settings.price_mode ?? 'fixed';
   const globalFixed = parseFloat(settings.fixed_price_ct ?? '30');

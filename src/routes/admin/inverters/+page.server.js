@@ -15,7 +15,7 @@ export const actions = {
   saveSettings: async ({ request }) => {
     const d = await request.formData();
     const upd = db.prepare('UPDATE app_settings SET value = ? WHERE key = ?');
-    for (const key of ['api_base_url', 'sync_interval', 'auto_refresh_s', 'spotty_url', 'tz_offset_h', 'price_mode', 'fixed_price_ct', 'mwst_percent', 'netzgebuehr_ct']) {
+    for (const key of ['api_base_url', 'sync_interval', 'auto_refresh_s', 'spotty_url', 'timezone', 'price_mode', 'fixed_price_ct', 'mwst_percent', 'netzgebuehr_ct']) {
       const v = d.get(key);
       if (v !== null) upd.run(v.toString().trim(), key);
     }

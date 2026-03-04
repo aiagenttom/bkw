@@ -161,6 +161,15 @@
           <input id="inv-color-{inv.id}" name="color" type="color" class="form-control form-control-sm form-control-color"
                  value={inv.color || '#3498db'} />
         </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label form-label-sm" for="inv-kwp-{inv.id}">kWp</label>
+          <div class="input-group input-group-sm">
+            <input id="inv-kwp-{inv.id}" name="kwp" type="number" min="0" step="0.01"
+                   class="form-control form-control-sm"
+                   value={inv.kwp || ''} placeholder="0" />
+            <span class="input-group-text">kWp</span>
+          </div>
+        </div>
       </div>
       <!-- URL configuration -->
       <div class="row g-2 mb-2 align-items-end border-top pt-2 mt-1">

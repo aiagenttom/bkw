@@ -23,6 +23,11 @@
             <i class="bi bi-bar-chart-fill me-1"></i>Verlauf
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link" class:active={path.startsWith('/prognose')} href="/prognose">
+            <i class="bi bi-cloud-sun me-1"></i>Prognose
+          </a>
+        </li>
         {#if isAdmin}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" class:active={path.startsWith('/admin')}

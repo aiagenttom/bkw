@@ -40,9 +40,7 @@
   let charts = {};
 
   onMount(async () => {
-    const { Chart, registerables } = await import(
-      'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js'
-    );
+    const { Chart, registerables } = await import('chart.js');
     Chart.register(...registerables);
 
     const labels = dateSet;

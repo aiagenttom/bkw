@@ -56,8 +56,8 @@ export async function load() {
           strftime('%Y-%m-%dT%H:', datetime(h.log_time, '-' || ? || ' hours')) ||
           printf('%02d:00Z', (CAST(strftime('%M', datetime(h.log_time, '-' || ? || ' hours')) AS INTEGER) / 15) * 15)
         )
-        WHERE date(h.log_time) = ? AND h.name = ? AND h.power_ac_v > 0
-      `).get(tzOffset, tzOffset, today, inv.name);
+        WHERE date(datetime(h.log_time, '+' || ? || ' hours')) = ? AND h.name = ? AND h.power_ac_v > 0
+      `).get(tzOffset, tzOffset, tzOffset, today, inv.name);
       priceCt = row?.avg_ct ?? fixedCt;
     }
 

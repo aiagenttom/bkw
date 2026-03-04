@@ -2,12 +2,13 @@ import { json } from '@sveltejs/kit';
 import db from '$lib/db.js';
 
 export function GET() {
-  const today    = new Date().toISOString().substring(0, 10);
   const settings = Object.fromEntries(
     db.prepare('SELECT key, value FROM app_settings').all().map(r => [r.key, r.value])
   );
-  const inverters  = db.prepare('SELECT * FROM inverters WHERE enabled = 1').all();
   const tzOffset   = parseInt(settings.tz_offset_h ?? '1');
+  const localNow   = new Date(Date.now() + tzOffset * 3_600_000);
+  const today      = localNow.toISOString().substring(0, 10);
+  const inverters  = db.prepare('SELECT * FROM inverters WHERE enabled = 1').all();
   const globalMode = settings.price_mode ?? 'fixed';
   const globalFixed = parseFloat(settings.fixed_price_ct ?? '30');
 
@@ -32,8 +33,8 @@ export function GET() {
           strftime('%Y-%m-%dT%H:', datetime(h.log_time, '-' || ? || ' hours')) ||
           printf('%02d:00Z', (CAST(strftime('%M', datetime(h.log_time, '-' || ? || ' hours')) AS INTEGER) / 15) * 15)
         )
-        WHERE date(h.log_time) = ? AND h.name = ? AND h.power_ac_v > 0
-      `).get(tzOffset, tzOffset, today, inv.name);
+        WHERE date(datetime(h.log_time, '+' || ? || ' hours')) = ? AND h.name = ? AND h.power_ac_v > 0
+      `).get(tzOffset, tzOffset, tzOffset, today, inv.name);
       priceCt = row?.avg_ct ?? fixedCt;
     }
 

@@ -33,10 +33,9 @@
   let ChartClass; // set in onMount, used by fetchData for lazy price chart
 
   onMount(async () => {
-    const mod = await import('https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js');
-    ChartClass = mod.Chart ?? mod.default;
-    const { registerables } = ChartClass;
-    ChartClass.register(...registerables);
+    const { Chart, registerables } = await import('chart.js');
+    Chart.register(...registerables);
+    ChartClass = Chart;
 
     const opts = (ylabel, beginZero = true) => ({
       responsive: true, maintainAspectRatio: false,
@@ -51,10 +50,10 @@
       },
     });
 
-    charts.power   = new ChartClass(document.getElementById('cPower'),   { type: 'line', data: { labels: [], datasets: [] }, options: opts('Watts (W)') });
-    charts.temp    = new ChartClass(document.getElementById('cTemp'),    { type: 'line', data: { labels: [], datasets: [] }, options: opts('°C', false) });
-    charts.current = new ChartClass(document.getElementById('cCurrent'), { type: 'line', data: { labels: [], datasets: [] }, options: opts('Ampere (A)') });
-    charts.voltage = new ChartClass(document.getElementById('cVoltage'), { type: 'line', data: { labels: [], datasets: [] }, options: opts('Voltage (V)', false) });
+    charts.power   = new Chart(document.getElementById('cPower'),   { type: 'line', data: { labels: [], datasets: [] }, options: opts('Watts (W)') });
+    charts.temp    = new Chart(document.getElementById('cTemp'),    { type: 'line', data: { labels: [], datasets: [] }, options: opts('°C', false) });
+    charts.current = new Chart(document.getElementById('cCurrent'), { type: 'line', data: { labels: [], datasets: [] }, options: opts('Ampere (A)') });
+    charts.voltage = new Chart(document.getElementById('cVoltage'), { type: 'line', data: { labels: [], datasets: [] }, options: opts('Voltage (V)', false) });
 
     await fetchData();
     const secs = parseInt(settings.auto_refresh_s || 30);
@@ -64,87 +63,93 @@
   onDestroy(() => { clearInterval(timer); Object.values(charts).forEach(c => c?.destroy()); });
 
   async function fetchData() {
-    const resp = await fetch(`/api/chart-data?name=${encodeURIComponent(selInv)}&date=${selDate}`);
-    const json = await resp.json();
-    if (!json.success) return;
+    try {
+      const resp = await fetch(`/api/chart-data?name=${encodeURIComponent(selInv)}&date=${selDate}`);
+      const json = await resp.json();
+      if (!json.success) return;
 
-    const g = json.data;
-    const names = Object.keys(g);
-    const labels = (g[names[0]] || []).map(r => r.log_time);
+      const g = json.data;
+      const names = Object.keys(g);
+      const labels = (g[names[0]] || []).map(r => r.log_time);
 
-    const ds = (key, fill = true) => names.map(n => ({
-      label: n, fill,
-      data: (g[n]||[]).map(r => r[key]),
-      borderColor: COLORS[n]?.border || '#888',
-      backgroundColor: fill ? (COLORS[n]?.bg || 'rgba(0,0,0,.1)') : 'transparent',
-      borderWidth: 2, pointRadius: labels.length > 60 ? 0 : 2, tension: 0.3,
-    }));
+      const ds = (key, fill = true) => names.map(n => ({
+        label: n, fill,
+        data: (g[n]||[]).map(r => r[key]),
+        borderColor: COLORS[n]?.border || '#888',
+        backgroundColor: fill ? (COLORS[n]?.bg || 'rgba(0,0,0,.1)') : 'transparent',
+        borderWidth: 2, pointRadius: labels.length > 60 ? 0 : 2, tension: 0.3,
+      }));
 
-    charts.power.data   = { labels, datasets: ds('power_dc_v') };
-    charts.temp.data    = { labels, datasets: ds('temperature_v', false) };
-    charts.current.data = { labels, datasets: ds('current_v', false) };
-    charts.voltage.data = { labels, datasets: ds('voltage_ac_v', false) };
-    ['power','temp','current','voltage'].forEach(k => charts[k]?.update('none'));
-    lastUpdate = 'Updated ' + new Date().toLocaleTimeString();
+      if (charts.power)   { charts.power.data   = { labels, datasets: ds('power_dc_v') };         charts.power.update('none'); }
+      if (charts.temp)     { charts.temp.data    = { labels, datasets: ds('temperature_v', false) }; charts.temp.update('none'); }
+      if (charts.current)  { charts.current.data = { labels, datasets: ds('current_v', false) };    charts.current.update('none'); }
+      if (charts.voltage)  { charts.voltage.data = { labels, datasets: ds('voltage_ac_v', false) }; charts.voltage.update('none'); }
+      lastUpdate = 'Updated ' + new Date().toLocaleTimeString();
 
-    // Recompute summary stats from fetched data (so they update when date changes)
-    summaryData = names.map(n => {
-      const rows = g[n] || [];
-      const powers = rows.map(r => r.power_dc_v).filter(v => v != null);
-      return {
-        name: n,
-        peak_power: powers.length ? parseFloat(Math.max(...powers).toFixed(1)) : null,
-        avg_power:  powers.length ? parseFloat((powers.reduce((a,b) => a+b, 0) / powers.length).toFixed(1)) : null,
-      };
-    });
-
-    // Refresh live data + savings
-    const live = await fetch('/api/live');
-    const lj = await live.json();
-    if (lj.success) liveData = lj.data;
-
-    // Re-fetch savings from server (lightweight endpoint)
-    const savR = await fetch('/api/today-savings');
-    const savJ = await savR.json();
-    if (savJ.success) todaySavings = savJ.data;
-
-    // Spotty price curve for selected day
-    const priceR = await fetch(`/api/prices?date=${selDate}`);
-    const priceJ = await priceR.json();
-    if (priceJ.success && priceJ.data.length) {
-      showPriceChart = true;
-      await tick(); // ensure cPrice canvas is visible before Chart.js init
-      if (!charts.price) {
-        const priceOpts = {
-          responsive: true, maintainAspectRatio: false,
-          interaction: { mode: 'index', intersect: false },
-          plugins: {
-            legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
-            tooltip: { callbacks: { title: items => items[0]?.label + ':00' || '' } },
-          },
-          scales: {
-            x: { ticks: { callback(v) { return this.getLabelForValue(v) + ':00'; } } },
-            y: { beginAtZero: false, title: { display: true, text: 'ct/kWh', font: { size: 11 } } },
-          },
+      // Recompute summary stats from fetched data (so they update when date changes)
+      summaryData = names.map(n => {
+        const rows = g[n] || [];
+        const powers = rows.map(r => r.power_dc_v).filter(v => v != null);
+        return {
+          name: n,
+          peak_power: powers.length ? parseFloat(Math.max(...powers).toFixed(1)) : null,
+          avg_power:  powers.length ? parseFloat((powers.reduce((a,b) => a+b, 0) / powers.length).toFixed(1)) : null,
         };
-        charts.price = new ChartClass(document.getElementById('cPrice'), {
-          type: 'line', data: { labels: [], datasets: [] }, options: priceOpts,
-        });
+      });
+
+      // Refresh live data + savings
+      const live = await fetch('/api/live');
+      const lj = await live.json();
+      if (lj.success) liveData = lj.data;
+
+      // Re-fetch savings from server (lightweight endpoint)
+      const savR = await fetch('/api/today-savings');
+      const savJ = await savR.json();
+      if (savJ.success) todaySavings = savJ.data;
+
+      // Spotty price curve for selected day
+      const priceR = await fetch(`/api/prices?date=${selDate}`);
+      const priceJ = await priceR.json();
+      if (priceJ.success && priceJ.data.length) {
+        showPriceChart = true;
+        await tick(); // ensure cPrice canvas is visible before Chart.js init
+        if (!charts.price && ChartClass) {
+          const priceOpts = {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+              tooltip: { callbacks: { title: items => items[0]?.label + ':00' || '' } },
+            },
+            scales: {
+              x: { ticks: { callback(v) { return this.getLabelForValue(v) + ':00'; } } },
+              y: { beginAtZero: false, title: { display: true, text: 'ct/kWh', font: { size: 11 } } },
+            },
+          };
+          charts.price = new ChartClass(document.getElementById('cPrice'), {
+            type: 'line', data: { labels: [], datasets: [] }, options: priceOpts,
+          });
+        }
+        if (charts.price) {
+          const priceLabels = priceJ.data.map(r => String(r.hour).padStart(2, '0'));
+          charts.price.data = {
+            labels: priceLabels,
+            datasets: [{
+              label: 'Ø Spotpreis (ct/kWh)',
+              data: priceJ.data.map(r => r.avg_price),
+              borderColor: '#f39c12',
+              backgroundColor: 'rgba(243,156,18,0.1)',
+              borderWidth: 2, pointRadius: 3, tension: 0.3, fill: true,
+            }],
+          };
+          charts.price.update('none');
+        }
+      } else {
+        showPriceChart = false;
       }
-      const priceLabels = priceJ.data.map(r => String(r.hour).padStart(2, '0'));
-      charts.price.data = {
-        labels: priceLabels,
-        datasets: [{
-          label: 'Ø Spotpreis (ct/kWh)',
-          data: priceJ.data.map(r => r.avg_price),
-          borderColor: '#f39c12',
-          backgroundColor: 'rgba(243,156,18,0.1)',
-          borderWidth: 2, pointRadius: 3, tension: 0.3, fill: true,
-        }],
-      };
-      charts.price.update('none');
-    } else {
-      showPriceChart = false;
+    } catch (err) {
+      console.error('[dashboard] fetchData error:', err);
+      lastUpdate = 'Error: ' + err.message;
     }
   }
 

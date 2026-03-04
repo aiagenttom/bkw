@@ -19,6 +19,7 @@
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^9.6.0",
+    "chart.js": "^4.5.1",
     "csv-parser": "^3.0.0",
     "node-cron": "^3.0.3"
   }

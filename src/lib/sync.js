@@ -197,7 +197,9 @@ export function pruneSpottyPrices() {
  * @param {string} [date] - ISO date YYYY-MM-DD, defaults to today
  */
 export function syncDaily(date) {
-  const target = date || new Date().toISOString().substring(0, 10);
+  const tzOffset = parseInt(getSetting('tz_offset_h') || '1');
+  const localNow = new Date(Date.now() + tzOffset * 3_600_000);
+  const target = date || localNow.toISOString().substring(0, 10);
 
   const rows = db.prepare(`
     SELECT
@@ -209,9 +211,9 @@ export function syncDaily(date) {
       ROUND(MAX(temperature_v), 1) AS max_temp,
       COUNT(*)                     AS readings
     FROM bkw_history
-    WHERE date(log_time) = ?
+    WHERE date(datetime(log_time, '+' || ? || ' hours')) = ?
     GROUP BY name
-  `).all(target);
+  `).all(tzOffset, target);
 
   if (!rows.length) {
     console.log(`[daily] no data for ${target}`);
@@ -222,7 +224,6 @@ export function syncDaily(date) {
   // Global defaults (used when inverter has no per-inverter override)
   const globalMode    = getSetting('price_mode') || 'fixed';
   const globalFixedCt = parseFloat(getSetting('fixed_price_ct') || '30');
-  const tzOffset      = parseInt(getSetting('tz_offset_h') || '1');
 
   // Load per-inverter settings: { name → { price_mode, fixed_price_ct } }
   const invSettings = Object.fromEntries(
@@ -251,11 +252,11 @@ export function syncDaily(date) {
             (CAST(strftime('%M', datetime(h.log_time, '-' || ? || ' hours')) AS INTEGER) / 15) * 15
           )
         )
-      WHERE date(h.log_time) = ?
+      WHERE date(datetime(h.log_time, '+' || ? || ' hours')) = ?
         AND h.power_ac_v > 0
         AND h.name IN (${placeholders})
       GROUP BY h.name
-    `).all(tzOffset, tzOffset, target, ...spottyInverters);
+    `).all(tzOffset, tzOffset, tzOffset, target, ...spottyInverters);
 
     for (const { inverter, avg_price_ct } of spotRows) {
       spottyAvgMap[inverter] = avg_price_ct;

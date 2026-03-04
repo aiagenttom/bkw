@@ -30,7 +30,8 @@ export const actions = {
     // price_mode: if "global" → store NULL (use global default)
     const priceMode   = d.get('price_mode')?.toString() || 'global';
     const fixedPriceCt = d.get('fixed_price_ct')?.toString().trim();
-    db.prepare('UPDATE inverters SET name=?, full_url=?, live_url=?, api_path=?, color=?, price_mode=?, fixed_price_ct=? WHERE id=?').run(
+    const kwpVal = d.get('kwp')?.toString().trim();
+    db.prepare('UPDATE inverters SET name=?, full_url=?, live_url=?, api_path=?, color=?, price_mode=?, fixed_price_ct=?, kwp=? WHERE id=?').run(
       name,
       d.get('full_url')?.toString().trim() || null,
       d.get('live_url')?.toString().trim() || null,
@@ -38,6 +39,7 @@ export const actions = {
       d.get('color')?.toString().trim() || '#3498db',
       priceMode === 'global' ? null : priceMode,
       fixedPriceCt ? parseFloat(fixedPriceCt) : null,
+      kwpVal ? parseFloat(kwpVal) : 0,
       id
     );
     return { success: `Inverter ${name} saved` };

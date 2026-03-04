@@ -140,6 +140,8 @@ if (!invCols.includes('fixed_price_ct'))
   db.exec('ALTER TABLE inverters ADD COLUMN fixed_price_ct REAL');
 if (!invCols.includes('live_url'))
   db.exec('ALTER TABLE inverters ADD COLUMN live_url TEXT');
+if (!invCols.includes('kwp'))
+  db.exec('ALTER TABLE inverters ADD COLUMN kwp REAL DEFAULT 0');
 
 const histCols = db.prepare('PRAGMA table_info(bkw_history)').all().map(c => c.name);
 if (!histCols.includes('dc_strings'))

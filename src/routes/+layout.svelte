@@ -46,6 +46,7 @@
             <li><a class="dropdown-item" href="/admin/daily"><i class="bi bi-calendar3 me-2"></i>Daily History</a></li>
             <li><hr class="dropdown-divider" /></li>
             <li><a class="dropdown-item" href="/admin/inverters"><i class="bi bi-lightning me-2"></i>Inverters</a></li>
+            <li><a class="dropdown-item" href="/admin/usage-profile"><i class="bi bi-bar-chart-steps me-2"></i>Verbrauchsprofil</a></li>
             <li><a class="dropdown-item" href="/admin/smartmeter"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Smart Meter</a></li>
             <li><a class="dropdown-item" href="/admin/users"><i class="bi bi-person-gear me-2"></i>Users</a></li>
           </ul>

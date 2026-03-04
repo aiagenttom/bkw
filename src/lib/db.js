@@ -128,6 +128,14 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS sessions (
     sid TEXT PRIMARY KEY, sess TEXT NOT NULL, expired TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS usage_profiles (
+    inverter_id INTEGER NOT NULL,
+    weekday     INTEGER NOT NULL,  -- 0=Mo, 1=Di, ..., 6=So
+    hour        INTEGER NOT NULL,  -- 0–23
+    kw          REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (inverter_id, weekday, hour)
+  );
 `);
 
 // Migrations

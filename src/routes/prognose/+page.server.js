@@ -104,45 +104,70 @@ export async function load() {
     console.warn('[prognose] weather fetch failed:', e.message);
   }
 
-  // --- 5) Calculate predictions ---
+  // --- 5) Usage profiles for tomorrow's weekday ---
+  // JavaScript getDay(): 0=Sun,1=Mon,...,6=Sat → convert to our 0=Mon,...,6=Sun
+  const tomorrowDate = new Date(tomorrow + 'T12:00:00');
+  const jsDay = tomorrowDate.getDay(); // 0=Sun
+  const weekday = jsDay === 0 ? 6 : jsDay - 1; // 0=Mon,...,6=Sun
+
+  const usageRows = db.prepare('SELECT inverter_id, hour, kw FROM usage_profiles WHERE weekday = ?').all(weekday);
+  const usageByInverter = {};
+  for (const r of usageRows) {
+    if (!usageByInverter[r.inverter_id]) usageByInverter[r.inverter_id] = new Array(24).fill(0);
+    usageByInverter[r.inverter_id][r.hour] = r.kw;
+  }
+
+  // --- 6) Calculate predictions with Eigenverbrauch ---
   const performanceRatio = 0.80;
   const predictions = [];
 
   for (const inv of inverters) {
     if (!inv.kwp || inv.kwp <= 0) {
-      predictions.push({ name: inv.name, color: inv.color, kwp: inv.kwp || 0, yieldKwh: null, savingsEur: null });
+      predictions.push({ name: inv.name, color: inv.color, kwp: inv.kwp || 0, yieldKwh: null, savingsEur: null, eigenverbrauchKwh: null, einspeisungKwh: null });
       continue;
     }
 
     let totalYieldWh = 0;
+    let totalEigenverbrauchWh = 0;
     let totalSavingsEur = 0;
+    const usageProfile = usageByInverter[inv.id];
+    const hasProfile = usageProfile && usageProfile.some(v => v > 0);
 
     // For each solar hour, calculate yield
     const solarHours = weather?.hourly?.filter(h => h.hour >= 5 && h.hour <= 21) || [];
     for (const h of solarHours) {
-      // GHI in W/m² → estimated yield for 1 hour
-      // Simple model: yield_wh = GHI * kWp * PR * 1h / 1000 (because GHI is per m², kWp ~ 1000W/kWp per 1000 W/m²)
       const yieldWh = h.ghi * inv.kwp * performanceRatio;
       totalYieldWh += yieldWh;
 
-      // Savings for this hour
+      // Eigenverbrauch: min(yield, usage) per hour
+      const usageWh = hasProfile ? usageProfile[h.hour] * 1000 : yieldWh; // if no profile: 100% usage
+      const eigenverbrauchWh = Math.min(yieldWh, usageWh);
+      totalEigenverbrauchWh += eigenverbrauchWh;
+
+      // Savings only on Eigenverbrauch
       const priceCt = prices.find(p => p.hour === h.hour)?.avg_price ?? (priceMode === 'spotty' ? null : fixedPriceCt);
       if (priceCt != null) {
         const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
-        totalSavingsEur += (yieldWh / 1000) * totalCtPerKwh / 100;
+        totalSavingsEur += (eigenverbrauchWh / 1000) * totalCtPerKwh / 100;
       }
     }
+
+    const yieldKwh = Math.round(totalYieldWh / 1000 * 100) / 100;
+    const eigenverbrauchKwh = Math.round(totalEigenverbrauchWh / 1000 * 100) / 100;
 
     predictions.push({
       name: inv.name,
       color: inv.color,
       kwp: inv.kwp,
-      yieldKwh: Math.round(totalYieldWh / 1000 * 100) / 100,
+      yieldKwh,
+      eigenverbrauchKwh: hasProfile ? eigenverbrauchKwh : null,
+      einspeisungKwh: hasProfile ? Math.round((yieldKwh - eigenverbrauchKwh) * 100) / 100 : null,
       savingsEur: Math.round(totalSavingsEur * 100) / 100,
+      hasProfile,
     });
   }
 
-  // --- 6) Current hour for "data available" check ---
+  // --- 7) Current hour for "data available" check ---
   const nowParts = new Intl.DateTimeFormat('en-US', {
     timeZone: tz, hour: 'numeric', hour12: false
   }).formatToParts(new Date());
@@ -161,5 +186,6 @@ export async function load() {
     priceMode,
     fixedPriceCt,
     timezone: tz,
+    weekday,
   };
 }

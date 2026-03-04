@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   export let data;
 
-  const { tomorrow, prices, weather, predictions, currentHour, mwstPct, netzCt, priceMode, fixedPriceCt, timezone } = data;
+  const { tomorrow, prices, weather, predictions, currentHour, mwstPct, netzCt, priceMode, fixedPriceCt, timezone, weekday } = data;
+  const dayNames = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
   const pricesAvailable = prices.length > 0;
   const weatherAvailable = weather && weather.hourly && weather.hourly.length > 0;
@@ -11,6 +12,9 @@
   const totalKwp = predictions.reduce((s, p) => s + (p.kwp || 0), 0);
   const totalYield = predictions.filter(p => p.yieldKwh != null).reduce((s, p) => s + p.yieldKwh, 0);
   const totalSavings = predictions.filter(p => p.savingsEur != null).reduce((s, p) => s + p.savingsEur, 0);
+  const hasAnyProfile = predictions.some(p => p.hasProfile);
+  const totalEigenverbrauch = predictions.filter(p => p.eigenverbrauchKwh != null).reduce((s, p) => s + p.eigenverbrauchKwh, 0);
+  const totalEinspeisung = predictions.filter(p => p.einspeisungKwh != null).reduce((s, p) => s + p.einspeisungKwh, 0);
 
   // Weather daily summary
   const daily = weather?.daily;
@@ -172,18 +176,37 @@
 <!-- Yield prediction table -->
 {#if weatherAvailable}
 <div class="card shadow-sm mb-4">
-  <div class="card-header fw-semibold"><i class="bi bi-lightning me-2"></i>Ertragsprognose</div>
+  <div class="card-header fw-semibold d-flex justify-content-between">
+    <span><i class="bi bi-lightning me-2"></i>Ertragsprognose</span>
+    {#if hasAnyProfile}
+      <span class="badge bg-info text-dark"><i class="bi bi-bar-chart-steps me-1"></i>Verbrauchsprofil: {dayNames[weekday]}</span>
+    {/if}
+  </div>
   <div class="card-body p-0">
+    <div class="table-responsive">
     <table class="table table-sm table-hover mb-0">
       <thead class="table-dark">
-        <tr><th>Inverter</th><th class="text-end">kWp</th><th class="text-end">Ertrag (kWh)</th><th class="text-end">Ersparnis (€)</th></tr>
+        <tr>
+          <th>Inverter</th>
+          <th class="text-end">kWp</th>
+          <th class="text-end">Ertrag</th>
+          {#if hasAnyProfile}
+            <th class="text-end">Eigenverbr.</th>
+            <th class="text-end">Einspeisung</th>
+          {/if}
+          <th class="text-end">Ersparnis</th>
+        </tr>
       </thead>
       <tbody>
         {#each predictions as p}
         <tr>
           <td><span class="d-inline-block rounded-circle me-2" style="width:12px;height:12px;background:{p.color}"></span>{p.name}</td>
           <td class="text-end">{p.kwp > 0 ? p.kwp.toFixed(2) : '–'}</td>
-          <td class="text-end fw-bold">{p.yieldKwh != null ? p.yieldKwh.toFixed(1) : '–'}</td>
+          <td class="text-end fw-bold">{p.yieldKwh != null ? `${p.yieldKwh.toFixed(1)} kWh` : '–'}</td>
+          {#if hasAnyProfile}
+            <td class="text-end text-primary">{p.eigenverbrauchKwh != null ? `${p.eigenverbrauchKwh.toFixed(1)} kWh` : '–'}</td>
+            <td class="text-end text-muted">{p.einspeisungKwh != null ? `${p.einspeisungKwh.toFixed(1)} kWh` : '–'}</td>
+          {/if}
           <td class="text-end fw-bold text-success">{p.savingsEur != null ? `€ ${p.savingsEur.toFixed(2)}` : '–'}</td>
         </tr>
         {/each}
@@ -191,12 +214,24 @@
           <td>Gesamt</td>
           <td class="text-end">{totalKwp.toFixed(2)}</td>
           <td class="text-end">{totalYield.toFixed(1)} kWh</td>
+          {#if hasAnyProfile}
+            <td class="text-end text-primary">{totalEigenverbrauch.toFixed(1)} kWh</td>
+            <td class="text-end text-muted">{totalEinspeisung.toFixed(1)} kWh</td>
+          {/if}
           <td class="text-end text-success">€ {totalSavings.toFixed(2)}</td>
         </tr>
       </tbody>
     </table>
+    </div>
   </div>
 </div>
+{#if !hasAnyProfile}
+<div class="alert alert-info py-2 small mb-4">
+  <i class="bi bi-info-circle me-1"></i>
+  Kein Verbrauchsprofil hinterlegt — Ersparnis wird bei 100% Nutzung berechnet.
+  <a href="/admin/usage-profile">Verbrauchsprofil anlegen →</a>
+</div>
+{/if}
 {/if}
 
 {#if !weatherAvailable && predictions.every(p => p.kwp <= 0)}

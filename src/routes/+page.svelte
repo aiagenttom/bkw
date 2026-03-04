@@ -89,27 +89,28 @@
       for (const n of names) {
         const rows = g[n] || [];
         const color = COLORS[n]?.border || '#888';
-        // Check if any row has dc_strings data
-        const hasDcStrings = rows.some(r => r.dc_strings);
+        // Show per-string lines when at least 3 rows have dc_strings data
+        const dcCount = rows.filter(r => r.dc_strings).length;
+        const hasDcStrings = dcCount >= 3;
         if (hasDcStrings) {
           // Parse dc_strings from first row that has it to get string names
           const sample = JSON.parse(rows.find(r => r.dc_strings)?.dc_strings || '[]');
-          // Per-string lines
+          // Per-string lines (use distinct dash patterns per string)
+          const dashPatterns = [[6, 3], [2, 2], [8, 4, 2, 4]];
           sample.forEach((s, idx) => {
-            const alpha = 0.6 + idx * 0.15;
             dsDcPower.push({
-              label: `${n} – ${s.name}`, fill: false,
-              data: rows.map(r => { const ds = r.dc_strings ? JSON.parse(r.dc_strings) : []; return ds[idx]?.power ?? null; }),
+              label: `${n} – ${s.name}`, fill: false, spanGaps: true,
+              data: rows.map(r => { const arr = r.dc_strings ? JSON.parse(r.dc_strings) : []; return arr[idx]?.power ?? null; }),
               borderColor: COLORS[n]?.border || '#888',
-              borderDash: [4, 2],
+              borderDash: dashPatterns[idx % dashPatterns.length],
               borderWidth: 1.5, pointRadius: ptRadius, tension: 0.3,
               backgroundColor: 'transparent',
             });
             dsDcCurrent.push({
-              label: `${n} – ${s.name}`, fill: false,
-              data: rows.map(r => { const ds = r.dc_strings ? JSON.parse(r.dc_strings) : []; return ds[idx]?.current ?? null; }),
+              label: `${n} – ${s.name}`, fill: false, spanGaps: true,
+              data: rows.map(r => { const arr = r.dc_strings ? JSON.parse(r.dc_strings) : []; return arr[idx]?.current ?? null; }),
               borderColor: COLORS[n]?.border || '#888',
-              borderDash: [4, 2],
+              borderDash: dashPatterns[idx % dashPatterns.length],
               borderWidth: 1.5, pointRadius: ptRadius, tension: 0.3,
               backgroundColor: 'transparent',
             });
@@ -128,7 +129,7 @@
             borderWidth: 2, pointRadius: ptRadius, tension: 0.3,
           });
         } else {
-          // No DC strings — single line
+          // Not enough DC string data — single line
           dsDcPower.push({
             label: n, fill: true,
             data: rows.map(r => r.power_dc_v),

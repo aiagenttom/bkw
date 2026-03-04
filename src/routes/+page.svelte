@@ -172,12 +172,20 @@
       const savJ = await savR.json();
       if (savJ.success) todaySavings = savJ.data;
 
-      // Spotty price curve for selected day
+      // Spotty price curve for selected day (filtered to 04:30–22:30, incl. MwSt + Netzgebühr)
       const priceR = await fetch(`/api/prices?date=${selDate}`);
       const priceJ = await priceR.json();
-      if (priceJ.success && priceJ.data.length) {
+      // Filter to hours 4–22 (matching the 04:30–22:30 solar window)
+      const priceData = (priceJ.data || []).filter(r => r.hour >= 4 && r.hour <= 22);
+      if (priceJ.success && priceData.length) {
         showPriceChart = true;
         await tick(); // ensure cPrice canvas is visible before Chart.js init
+
+        // Apply MwSt + Netzgebühr to spot prices
+        const mwstPct = parseFloat(settings.mwst_percent ?? '0');
+        const netzCt  = parseFloat(settings.netzgebuehr_ct ?? '0');
+        const applyTaxes = (ct) => parseFloat(((ct + netzCt) * (1 + mwstPct / 100)).toFixed(3));
+
         if (!charts.price && ChartClass) {
           const priceOpts = {
             responsive: true, maintainAspectRatio: false,
@@ -196,12 +204,12 @@
           });
         }
         if (charts.price) {
-          const priceLabels = priceJ.data.map(r => String(r.hour).padStart(2, '0'));
+          const priceLabels = priceData.map(r => String(r.hour).padStart(2, '0'));
           charts.price.data = {
             labels: priceLabels,
             datasets: [{
-              label: 'Ø Spotpreis (ct/kWh)',
-              data: priceJ.data.map(r => r.avg_price),
+              label: `Ø Spotpreis inkl. Netzgeb. + ${mwstPct}% MwSt (ct/kWh)`,
+              data: priceData.map(r => applyTaxes(r.avg_price)),
               borderColor: '#f39c12',
               backgroundColor: 'rgba(243,156,18,0.1)',
               borderWidth: 2, pointRadius: 3, tension: 0.3, fill: true,
@@ -371,7 +379,7 @@
   <div class="col-12">
     <div class="card shadow-sm">
       <div class="card-header fw-semibold">
-        <i class="bi bi-graph-up text-warning me-2"></i>Spotpreis – stündlicher Ø
+        <i class="bi bi-graph-up text-warning me-2"></i>Spotpreis – stündlicher Ø (inkl. Netzgeb. + MwSt)
         <span class="badge bg-warning text-dark ms-2" style="font-size:.7rem">ct/kWh</span>
       </div>
       <div class="card-body"><canvas id="cPrice" style="max-height:200px"></canvas></div>

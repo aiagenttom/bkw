@@ -141,6 +141,10 @@ if (!invCols.includes('fixed_price_ct'))
 if (!invCols.includes('live_url'))
   db.exec('ALTER TABLE inverters ADD COLUMN live_url TEXT');
 
+const histCols = db.prepare('PRAGMA table_info(bkw_history)').all().map(c => c.name);
+if (!histCols.includes('dc_strings'))
+  db.exec('ALTER TABLE bkw_history ADD COLUMN dc_strings TEXT');
+
 const dailyCols = db.prepare('PRAGMA table_info(bkw_daily)').all().map(c => c.name);
 if (!dailyCols.includes('savings_eur'))
   db.exec('ALTER TABLE bkw_daily ADD COLUMN savings_eur REAL');
@@ -171,6 +175,8 @@ for (const [k, v, l] of [
   ['tz_offset_h',    '1',                            'Local UTC offset (hours, e.g. 1 for CET, 2 for CEST)'],
   ['price_mode',     'fixed',                        'Tariff mode: spotty or fixed'],
   ['fixed_price_ct', '30',                           'Fixed tariff (ct/kWh)'],
+  ['mwst_percent',   '20',                           'MwSt (%)'],
+  ['netzgebuehr_ct', '0',                            'Netzgebühr (ct/kWh)'],
 ]) db.prepare('INSERT OR IGNORE INTO app_settings (key, value, label) VALUES (?,?,?)').run(k, v, l);
 
 // Demo history

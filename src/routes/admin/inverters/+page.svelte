@@ -95,6 +95,29 @@
         </div>
       </div>
 
+      <hr class="my-3" />
+
+      <!-- Steuern & Gebühren -->
+      <div class="fw-semibold small mb-2"><i class="bi bi-receipt me-1"></i>Steuern &amp; Gebühren</div>
+      <div class="row g-3">
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold small" for="mwst">MwSt</label>
+          <div class="input-group input-group-sm">
+            <input id="mwst" name="mwst_percent" type="number" min="0" max="100" step="0.1" class="form-control form-control-sm"
+                   value={settings.mwst_percent || '20'} />
+            <span class="input-group-text">%</span>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-semibold small" for="netzgebuehr">Netzgebühr</label>
+          <div class="input-group input-group-sm">
+            <input id="netzgebuehr" name="netzgebuehr_ct" type="number" min="0" step="0.01" class="form-control form-control-sm"
+                   value={settings.netzgebuehr_ct || '0'} />
+            <span class="input-group-text">ct/kWh</span>
+          </div>
+        </div>
+      </div>
+
       <button class="btn btn-primary btn-sm mt-3">
         <i class="bi bi-save me-1"></i>Save Settings
       </button>

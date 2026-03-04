@@ -18,6 +18,18 @@ function parseInverterData(inv) {
   const dcKeys = Object.keys(inv.DC || {});
   const dc0    = inv.DC?.['0'] || {};
   const totalDcCurrent = dcKeys.reduce((s, k) => s + (inv.DC[k].Current?.v ?? 0), 0) || null;
+
+  // Per-MPPT-string breakdown (e.g. "Wand", "Villa")
+  const dcStrings = dcKeys.map(k => {
+    const dc = inv.DC[k];
+    return {
+      name:    dc.name?.u ?? `String ${k}`,
+      power:   dc.Power?.v   ?? null,
+      voltage: dc.Voltage?.v ?? null,
+      current: dc.Current?.v ?? null,
+    };
+  }).filter(s => s.power != null || s.current != null);
+
   return {
     serial:         inv.serial ?? null,
     name:           inv.name   ?? null,
@@ -37,6 +49,7 @@ function parseInverterData(inv) {
     efficiency:     iv.Efficiency?.v     ?? null,
     producing:      inv.producing ? 1 : 0,
     reachable:      inv.reachable ? 1 : 0,
+    dc_strings:     dcStrings.length > 1 ? dcStrings : null,
   };
 }
 
@@ -101,10 +114,11 @@ export async function syncInverter(inverterName, apiPath, baseUrl, fullUrl, live
     (SELECT id FROM ${table} ORDER BY synced_at DESC LIMIT 60)`).run();
   db.prepare(`INSERT INTO bkw_history
     (name, log_time, temperature_v, power_dc_v, current_v,
-     power_ac_v, voltage_ac_v, frequency_v, power_factor, yield_day, yield_total)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(
+     power_ac_v, voltage_ac_v, frequency_v, power_factor, yield_day, yield_total, dc_strings)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       inverterName, now, p.temperature, p.power_dc, p.current_dc,
-      p.power_ac, p.voltage_ac, p.frequency, p.power_factor, p.yield_day, p.yield_total);
+      p.power_ac, p.voltage_ac, p.frequency, p.power_factor, p.yield_day, p.yield_total,
+      p.dc_strings ? JSON.stringify(p.dc_strings) : null);
   db.exec('COMMIT');
 
   console.log(`[sync] ${inverterName}: ${liveP.power_ac}W AC`);
@@ -224,6 +238,8 @@ export function syncDaily(date) {
   // Global defaults (used when inverter has no per-inverter override)
   const globalMode    = getSetting('price_mode') || 'fixed';
   const globalFixedCt = parseFloat(getSetting('fixed_price_ct') || '30');
+  const mwstPct       = parseFloat(getSetting('mwst_percent') || '0');
+  const netzCt        = parseFloat(getSetting('netzgebuehr_ct') || '0');
 
   // Load per-inverter settings: { name → { price_mode, fixed_price_ct } }
   const invSettings = Object.fromEntries(
@@ -273,8 +289,9 @@ export function syncDaily(date) {
     } else {
       r.avg_price_ct = spottyAvgMap[r.inverter] ?? null;
     }
-    r.savings_eur = r.avg_price_ct != null && r.yield_wh != null
-      ? parseFloat((r.yield_wh / 1000 * r.avg_price_ct / 100).toFixed(4))
+    const totalCtPerKwh = r.avg_price_ct != null ? (r.avg_price_ct + netzCt) * (1 + mwstPct / 100) : null;
+    r.savings_eur = totalCtPerKwh != null && r.yield_wh != null
+      ? parseFloat((r.yield_wh / 1000 * totalCtPerKwh / 100).toFixed(4))
       : null;
   }
 

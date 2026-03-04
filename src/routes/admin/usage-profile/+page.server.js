@@ -37,16 +37,20 @@ export const actions = {
 
     // data = { weekday: [24 kw values], ... } e.g. { "0": [0,0,...], "1": [...], ... }
     const ins = db.prepare('INSERT OR REPLACE INTO usage_profiles (inverter_id, weekday, hour, kw) VALUES (?,?,?,?)');
-    db.exec('BEGIN');
-    for (const [wd, hours] of Object.entries(data)) {
-      const weekday = parseInt(wd);
-      if (weekday < 0 || weekday > 6 || !Array.isArray(hours)) continue;
-      for (let h = 0; h < 24; h++) {
-        const kw = parseFloat(hours[h] || 0);
-        ins.run(inverterId, weekday, h, Math.round(kw * 100) / 100);
+    let rowCount = 0;
+    const saveTransaction = db.transaction(() => {
+      for (const [wd, hours] of Object.entries(data)) {
+        const weekday = parseInt(wd);
+        if (weekday < 0 || weekday > 6 || !Array.isArray(hours)) continue;
+        for (let h = 0; h < 24; h++) {
+          const kw = parseFloat(hours[h] || 0);
+          ins.run(inverterId, weekday, h, Math.round(kw * 100) / 100);
+          rowCount++;
+        }
       }
-    }
-    db.exec('COMMIT');
-    return { success: 'Verbrauchsprofil gespeichert' };
+    });
+    saveTransaction();
+    console.log(`[usage-profile] Saved ${rowCount} rows for inverter ${inverterId}`);
+    return { success: `Verbrauchsprofil gespeichert (${rowCount} Einträge)` };
   },
 };

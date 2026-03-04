@@ -25,10 +25,10 @@
         </li>
         {#if isAdmin}
         <li class="nav-item dropdown">
-          <button class="nav-link dropdown-toggle btn btn-link p-0" class:active={path.startsWith('/admin')}
-                  type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          <a class="nav-link dropdown-toggle" class:active={path.startsWith('/admin')}
+             href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="bi bi-gear-fill me-1"></i>Admin
-          </button>
+          </a>
           <ul class="dropdown-menu dropdown-menu-dark">
             <li><a class="dropdown-item" href="/admin"><i class="bi bi-house me-2"></i>Overview</a></li>
             <li><hr class="dropdown-divider" /></li>

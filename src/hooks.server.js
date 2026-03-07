@@ -1,6 +1,6 @@
 import { getSession, pruneSessions } from '$lib/session.js';
 import db from '$lib/db.js';
-import { syncAll, syncDaily, syncSpottyPrices, pruneSpottyPrices } from '$lib/sync.js';
+import { syncAll, syncDaily, syncSpottyPrices, pruneSpottyPrices, syncWeather } from '$lib/sync.js';
 import cron from 'node-cron';
 
 // ── Cron scheduler (starts once at module load) ───────────────────────────────
@@ -35,6 +35,14 @@ cron.schedule('5 * * * *', () => {
 // Fetch prices once on startup
 syncSpottyPrices().catch(e => console.error('[spotty] initial fetch error:', e.message));
 console.log('[cron] spotty price sync scheduled: 5 * * * *');
+
+// ── Weather sync: every hour at :15 ──────────────────────────────────────────
+cron.schedule('15 * * * *', () => {
+  syncWeather().catch(e => console.error('[weather] sync error:', e.message));
+});
+// Fetch weather once on startup
+syncWeather().catch(e => console.error('[weather] initial fetch error:', e.message));
+console.log('[cron] weather sync scheduled: 15 * * * *');
 
 // Prune sessions every 30 minutes
 let pruneTimer = null;

@@ -60,49 +60,103 @@ export async function load({ url }) {
   const priceMode = getSetting('price_mode') || 'fixed';
   const fixedPriceCt = parseFloat(getSetting('fixed_price_ct') || '30');
 
-  // --- 4) Fetch weather from Open-Meteo (7-day forecast) ---
+  // --- 4) Weather: read from DB first, fall back to live API for forecast dates ---
   let weather = null;
-  try {
-    const weatherUrl = 'https://api.open-meteo.com/v1/forecast'
-      + '?latitude=48.08&longitude=16.28'
-      + '&hourly=shortwave_radiation,direct_radiation,cloud_cover,temperature_2m,windspeed_10m'
-      + '&daily=sunshine_duration,shortwave_radiation_sum,temperature_2m_max,temperature_2m_min'
-      + '&forecast_days=7'
-      + '&timezone=' + encodeURIComponent(tz);
 
-    const resp = await fetch(weatherUrl, { signal: AbortSignal.timeout(8000) });
-    if (resp.ok) {
-      const data = await resp.json();
+  const dbHourly = db.prepare('SELECT * FROM weather_hourly WHERE date = ? ORDER BY hour').all(targetDate);
+  const dbDaily  = db.prepare('SELECT * FROM weather_daily WHERE date = ?').get(targetDate);
 
-      const targetIdx = data.daily?.time?.indexOf(targetDate) ?? -1;
+  if (dbHourly.length > 0) {
+    // Use cached data from DB
+    weather = {
+      hourly: dbHourly.map(r => ({
+        hour: r.hour,
+        ghi: r.ghi ?? 0,
+        directRadiation: r.direct_radiation ?? 0,
+        cloudCover: r.cloud_cover ?? 0,
+        temperature: r.temperature ?? 0,
+        windSpeed: r.wind_speed ?? 0,
+      })),
+      daily: dbDaily ? {
+        sunshineDurationH: dbDaily.sunshine_duration_h ?? 0,
+        radiationSum: dbDaily.radiation_sum ?? 0,
+        tempMax: dbDaily.temp_max ?? null,
+        tempMin: dbDaily.temp_min ?? null,
+      } : null,
+    };
+  } else if (targetDate <= maxDate) {
+    // Not in DB yet and within forecast range → fetch live and persist
+    try {
+      const weatherUrl = 'https://api.open-meteo.com/v1/forecast'
+        + '?latitude=48.08&longitude=16.28'
+        + '&hourly=shortwave_radiation,direct_radiation,cloud_cover,temperature_2m,windspeed_10m'
+        + '&daily=sunshine_duration,shortwave_radiation_sum,temperature_2m_max,temperature_2m_min'
+        + '&forecast_days=7'
+        + '&timezone=' + encodeURIComponent(tz);
 
-      const hourlyTarget = [];
-      if (data.hourly?.time) {
-        for (let i = 0; i < data.hourly.time.length; i++) {
-          if (data.hourly.time[i].startsWith(targetDate)) {
-            hourlyTarget.push({
-              hour: parseInt(data.hourly.time[i].substring(11, 13)),
-              ghi: data.hourly.shortwave_radiation?.[i] ?? 0,
-              directRadiation: data.hourly.direct_radiation?.[i] ?? 0,
-              cloudCover: data.hourly.cloud_cover?.[i] ?? 0,
-              temperature: data.hourly.temperature_2m?.[i] ?? 0,
-              windSpeed: data.hourly.windspeed_10m?.[i] ?? 0,
-            });
+      const resp = await fetch(weatherUrl, { signal: AbortSignal.timeout(8000) });
+      if (resp.ok) {
+        const apiData = await resp.json();
+        const targetIdx = apiData.daily?.time?.indexOf(targetDate) ?? -1;
+
+        const insH = db.prepare(`INSERT OR REPLACE INTO weather_hourly
+          (date, hour, ghi, direct_radiation, cloud_cover, temperature, wind_speed)
+          VALUES (?,?,?,?,?,?,?)`);
+        const insD = db.prepare(`INSERT OR REPLACE INTO weather_daily
+          (date, sunshine_duration_h, radiation_sum, temp_max, temp_min)
+          VALUES (?,?,?,?,?)`);
+
+        const hourlyTarget = [];
+        db.transaction(() => {
+          if (apiData.hourly?.time) {
+            for (let i = 0; i < apiData.hourly.time.length; i++) {
+              const dt = apiData.hourly.time[i];
+              const d  = dt.substring(0, 10);
+              const h  = parseInt(dt.substring(11, 13));
+              insH.run(d, h,
+                apiData.hourly.shortwave_radiation?.[i] ?? null,
+                apiData.hourly.direct_radiation?.[i]    ?? null,
+                apiData.hourly.cloud_cover?.[i]         ?? null,
+                apiData.hourly.temperature_2m?.[i]      ?? null,
+                apiData.hourly.windspeed_10m?.[i]       ?? null,
+              );
+              if (d === targetDate) {
+                hourlyTarget.push({
+                  hour: h,
+                  ghi: apiData.hourly.shortwave_radiation?.[i] ?? 0,
+                  directRadiation: apiData.hourly.direct_radiation?.[i] ?? 0,
+                  cloudCover: apiData.hourly.cloud_cover?.[i] ?? 0,
+                  temperature: apiData.hourly.temperature_2m?.[i] ?? 0,
+                  windSpeed: apiData.hourly.windspeed_10m?.[i] ?? 0,
+                });
+              }
+            }
           }
-        }
+          if (apiData.daily?.time) {
+            for (let i = 0; i < apiData.daily.time.length; i++) {
+              insD.run(
+                apiData.daily.time[i],
+                Math.round((apiData.daily.sunshine_duration?.[i] ?? 0) / 3600 * 10) / 10,
+                apiData.daily.shortwave_radiation_sum?.[i] ?? null,
+                apiData.daily.temperature_2m_max?.[i]      ?? null,
+                apiData.daily.temperature_2m_min?.[i]      ?? null,
+              );
+            }
+          }
+        })();
+
+        const dailySummary = targetIdx >= 0 ? {
+          sunshineDurationH: Math.round((apiData.daily.sunshine_duration?.[targetIdx] ?? 0) / 3600 * 10) / 10,
+          radiationSum: apiData.daily.shortwave_radiation_sum?.[targetIdx] ?? 0,
+          tempMax: apiData.daily.temperature_2m_max?.[targetIdx] ?? null,
+          tempMin: apiData.daily.temperature_2m_min?.[targetIdx] ?? null,
+        } : null;
+
+        weather = { hourly: hourlyTarget, daily: dailySummary };
       }
-
-      const dailySummary = targetIdx >= 0 ? {
-        sunshineDurationH: Math.round((data.daily.sunshine_duration?.[targetIdx] ?? 0) / 3600 * 10) / 10,
-        radiationSum: data.daily.shortwave_radiation_sum?.[targetIdx] ?? 0,
-        tempMax: data.daily.temperature_2m_max?.[targetIdx] ?? null,
-        tempMin: data.daily.temperature_2m_min?.[targetIdx] ?? null,
-      } : null;
-
-      weather = { hourly: hourlyTarget, daily: dailySummary };
+    } catch (e) {
+      console.warn('[prognose] weather fetch failed:', e.message);
     }
-  } catch (e) {
-    console.warn('[prognose] weather fetch failed:', e.message);
   }
 
   // --- 5) Usage profiles for target date's weekday ---

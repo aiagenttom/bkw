@@ -1,5 +1,5 @@
 import db from './db.js';
-import { getTzOffset, getLocalToday } from './tz.js';
+import { getTzOffset, getLocalToday, getTimezone } from './tz.js';
 
 function getSetting(key) {
   return db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key)?.value ?? null;
@@ -310,4 +310,71 @@ export function syncDaily(date) {
 
   console.log(`[daily] snapshotted ${rows.length} inverters for ${target} (mode=${globalMode})`);
   return rows;
+}
+
+/**
+ * Fetch 7-day weather forecast from Open-Meteo and persist to weather_hourly / weather_daily.
+ * Uses INSERT OR REPLACE so re-running is safe and updates stale forecasts.
+ */
+export async function syncWeather() {
+  const tz = getTimezone();
+  const url = 'https://api.open-meteo.com/v1/forecast'
+    + '?latitude=48.08&longitude=16.28'
+    + '&hourly=shortwave_radiation,direct_radiation,cloud_cover,temperature_2m,windspeed_10m'
+    + '&daily=sunshine_duration,shortwave_radiation_sum,temperature_2m_max,temperature_2m_min'
+    + '&forecast_days=7'
+    + '&timezone=' + encodeURIComponent(tz);
+
+  let data;
+  try {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    data = await resp.json();
+  } catch (e) {
+    console.warn(`[weather] fetch failed: ${e.message}`);
+    return;
+  }
+
+  const insHourly = db.prepare(`
+    INSERT OR REPLACE INTO weather_hourly (date, hour, ghi, direct_radiation, cloud_cover, temperature, wind_speed)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  const insDaily = db.prepare(`
+    INSERT OR REPLACE INTO weather_daily (date, sunshine_duration_h, radiation_sum, temp_max, temp_min)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  let hourlyCount = 0;
+  db.transaction(() => {
+    if (data.hourly?.time) {
+      for (let i = 0; i < data.hourly.time.length; i++) {
+        const dt   = data.hourly.time[i]; // e.g. "2026-03-07T14:00"
+        const date = dt.substring(0, 10);
+        const hour = parseInt(dt.substring(11, 13));
+        insHourly.run(
+          date, hour,
+          data.hourly.shortwave_radiation?.[i]  ?? null,
+          data.hourly.direct_radiation?.[i]     ?? null,
+          data.hourly.cloud_cover?.[i]          ?? null,
+          data.hourly.temperature_2m?.[i]       ?? null,
+          data.hourly.windspeed_10m?.[i]        ?? null,
+        );
+        hourlyCount++;
+      }
+    }
+    if (data.daily?.time) {
+      for (let i = 0; i < data.daily.time.length; i++) {
+        const date = data.daily.time[i];
+        insDaily.run(
+          date,
+          Math.round((data.daily.sunshine_duration?.[i] ?? 0) / 3600 * 10) / 10,
+          data.daily.shortwave_radiation_sum?.[i]  ?? null,
+          data.daily.temperature_2m_max?.[i]       ?? null,
+          data.daily.temperature_2m_min?.[i]       ?? null,
+        );
+      }
+    }
+  })();
+
+  console.log(`[weather] synced ${hourlyCount} hourly slots (7-day forecast)`);
 }

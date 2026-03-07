@@ -138,6 +138,28 @@ db.exec(`
   );
 `);
 
+// Weather storage tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS weather_hourly (
+    date            TEXT NOT NULL,   -- YYYY-MM-DD (local timezone)
+    hour            INTEGER NOT NULL, -- 0-23
+    ghi             REAL,            -- shortwave_radiation W/m²
+    direct_radiation REAL,
+    cloud_cover     REAL,            -- %
+    temperature     REAL,            -- °C
+    wind_speed      REAL,            -- km/h
+    PRIMARY KEY (date, hour)
+  );
+
+  CREATE TABLE IF NOT EXISTS weather_daily (
+    date                TEXT PRIMARY KEY, -- YYYY-MM-DD (local timezone)
+    sunshine_duration_h REAL,
+    radiation_sum       REAL,
+    temp_max            REAL,
+    temp_min            REAL
+  );
+`);
+
 // Migrations
 const invCols = db.prepare('PRAGMA table_info(inverters)').all().map(c => c.name);
 if (!invCols.includes('full_url'))

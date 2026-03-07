@@ -146,7 +146,6 @@ Für Backups genügt es, diese Datei zu kopieren (App sollte dabei gestoppt sein
 | Spotty-Preise | Jede Stunde (:05) | EPEX Spot-Preise aktualisieren |
 | Wetter-Sync | Jede Stunde (:15) | 7-Tage Open-Meteo Forecast speichern |
 | Tages-Snapshot | 23:55 täglich | Tagesertrag & Ersparnis berechnen |
-| Preis-Bereinigung | 23:55 täglich | Spotpreise älter als 13 Monate löschen |
 
 ---
 

@@ -1,39 +1,43 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   export let data;
 
-  const { targetDate, today, tomorrow, maxDate, prices, weather, predictions, currentHour, mwstPct, netzCt, priceMode, fixedPriceCt, timezone, weekday } = data;
   const dayNames = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
-  const pricesAvailable = prices.length > 0;
-  const weatherAvailable = weather && weather.hourly && weather.hourly.length > 0;
+  // Reactive – all variables update on SvelteKit navigation (query param changes)
+  let targetDate, today, tomorrow, minDate, maxDate, prices, weather, predictions;
+  let currentHour, mwstPct, netzCt, priceMode, fixedPriceCt, timezone, weekday;
+  $: ({ targetDate, today, tomorrow, minDate, maxDate, prices, weather, predictions,
+        currentHour, mwstPct, netzCt, priceMode, fixedPriceCt, timezone, weekday } = data);
+
+  $: pricesAvailable = prices.length > 0;
+  $: weatherAvailable = weather && weather.hourly && weather.hourly.length > 0;
 
   // Totals
-  const totalKwp = predictions.reduce((s, p) => s + (p.kwp || 0), 0);
-  const totalYield = predictions.filter(p => p.yieldKwh != null).reduce((s, p) => s + p.yieldKwh, 0);
-  const totalSavings = predictions.filter(p => p.savingsEur != null).reduce((s, p) => s + p.savingsEur, 0);
-  const hasAnyProfile = predictions.some(p => p.hasProfile);
-  const totalEigenverbrauch = predictions.filter(p => p.eigenverbrauchKwh != null).reduce((s, p) => s + p.eigenverbrauchKwh, 0);
-  const totalEinspeisung = predictions.filter(p => p.einspeisungKwh != null).reduce((s, p) => s + p.einspeisungKwh, 0);
+  $: totalKwp = predictions.reduce((s, p) => s + (p.kwp || 0), 0);
+  $: totalYield = predictions.filter(p => p.yieldKwh != null).reduce((s, p) => s + p.yieldKwh, 0);
+  $: totalSavings = predictions.filter(p => p.savingsEur != null).reduce((s, p) => s + p.savingsEur, 0);
+  $: hasAnyProfile = predictions.some(p => p.hasProfile);
+  $: totalEigenverbrauch = predictions.filter(p => p.eigenverbrauchKwh != null).reduce((s, p) => s + p.eigenverbrauchKwh, 0);
+  $: totalEinspeisung = predictions.filter(p => p.einspeisungKwh != null).reduce((s, p) => s + p.einspeisungKwh, 0);
 
   // Weather daily summary
-  const daily = weather?.daily;
+  $: daily = weather?.daily;
+  $: solarWeather = weather?.hourly?.filter(h => h.hour >= 5 && h.hour <= 21) || [];
+  $: avgCloud = solarWeather.length ? Math.round(solarWeather.reduce((s, h) => s + h.cloudCover, 0) / solarWeather.length) : null;
+  $: maxGhi = solarWeather.length ? Math.round(Math.max(...solarWeather.map(h => h.ghi))) : null;
 
-  const solarWeather = weather?.hourly?.filter(h => h.hour >= 5 && h.hour <= 21) || [];
-  const avgCloud = solarWeather.length ? Math.round(solarWeather.reduce((s, h) => s + h.cloudCover, 0) / solarWeather.length) : null;
-  const maxGhi = solarWeather.length ? Math.round(Math.max(...solarWeather.map(h => h.ghi))) : null;
-
-  // Date navigation helpers
+  // Date navigation
   function addDays(dateStr, n) {
     const d = new Date(dateStr + 'T12:00:00');
     d.setDate(d.getDate() + n);
     return d.toISOString().substring(0, 10);
   }
 
-  const prevDate = addDays(targetDate, -1);
-  const nextDate = addDays(targetDate, +1);
-  const canGoPrev = prevDate >= today;
-  const canGoNext = nextDate <= maxDate;
+  $: prevDate = targetDate ? addDays(targetDate, -1) : null;
+  $: nextDate = targetDate ? addDays(targetDate, +1) : null;
+  $: canGoPrev = prevDate && minDate && prevDate >= minDate;
+  $: canGoNext = nextDate && maxDate && nextDate <= maxDate;
 
   function dateLabel(dateStr) {
     if (dateStr === today) return 'Heute';
@@ -50,15 +54,29 @@
     return `/prognose?date=${dateStr}`;
   }
 
+  // Spot prices badge message
+  $: pricesBadgeMsg = targetDate <= tomorrow ? 'ab ~14 Uhr verfügbar' : 'nicht verfügbar';
+
+  // Charts – destroy and rebuild whenever data changes
   let ChartClass;
+  let priceChartInst = null;
+  let weatherChartInst = null;
+
   onMount(async () => {
     const mod = await import('chart.js/auto');
     ChartClass = mod.default || mod.Chart;
-    buildCharts();
   });
 
+  // Rebuild when data or ChartClass changes
+  $: if (ChartClass) {
+    // Reference data properties to create reactive dependency
+    void prices; void weather;
+    tick().then(buildCharts);
+  }
+
   function buildCharts() {
-    if (!ChartClass) return;
+    if (priceChartInst) { priceChartInst.destroy(); priceChartInst = null; }
+    if (weatherChartInst) { weatherChartInst.destroy(); weatherChartInst = null; }
     buildPriceChart();
     buildWeatherChart();
   }
@@ -72,7 +90,7 @@
     const labels = filteredPrices.map(p => `${String(p.hour).padStart(2,'0')}:00`);
     const values = filteredPrices.map(p => parseFloat(((p.avg_price + netzCt) * (1 + mwstPct / 100)).toFixed(3)));
 
-    new ChartClass(canvas, {
+    priceChartInst = new ChartClass(canvas, {
       type: 'line',
       data: {
         labels,
@@ -104,7 +122,7 @@
     const solarHours = weather.hourly.filter(h => h.hour >= 4 && h.hour <= 22);
     const labels = solarHours.map(h => `${String(h.hour).padStart(2,'0')}:00`);
 
-    new ChartClass(canvas, {
+    weatherChartInst = new ChartClass(canvas, {
       type: 'bar',
       data: {
         labels,
@@ -147,7 +165,7 @@
 
 <svelte:head><title>Prognose – BKW</title></svelte:head>
 
-<!-- Header with navigation -->
+<!-- Header -->
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h4 class="fw-bold mb-0"><i class="bi bi-cloud-sun me-2"></i>Prognose</h4>
 </div>
@@ -164,7 +182,6 @@
     </button>
   {/if}
 
-  <!-- Quick links -->
   <a href={dateHref(today)} class="btn btn-sm {targetDate === today ? 'btn-primary' : 'btn-outline-primary'}">Heute</a>
   <a href={dateHref(tomorrow)} class="btn btn-sm {targetDate === tomorrow ? 'btn-primary' : 'btn-outline-primary'}">Morgen</a>
 
@@ -186,12 +203,14 @@
   {#if pricesAvailable}
     <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Spotpreise verfügbar ({prices.length}h)</span>
   {:else}
-    <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Spotpreise {targetDate === today ? 'ab ~14 Uhr verfügbar' : 'nicht verfügbar'}</span>
+    <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Spotpreise {pricesBadgeMsg}</span>
   {/if}
   {#if weatherAvailable}
     <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Wetterdaten geladen</span>
-  {:else}
+  {:else if targetDate <= maxDate}
     <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Wetterdaten nicht verfügbar</span>
+  {:else}
+    <span class="badge bg-secondary"><i class="bi bi-calendar-x me-1"></i>Kein Wetter-Forecast verfügbar</span>
   {/if}
   <span class="badge bg-secondary"><i class="bi bi-geo-alt me-1"></i>Bezirk Mödling</span>
 </div>
@@ -315,7 +334,7 @@
   {/if}
 </div>
 
-<!-- Low price insight -->
+<!-- Market insight -->
 {#if pricesAvailable}
 {@const avgPrice = prices.reduce((s, p) => s + p.avg_price, 0) / prices.length}
 {@const solarPrices = prices.filter(p => p.hour >= 8 && p.hour <= 16)}

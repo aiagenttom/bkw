@@ -24,11 +24,18 @@ export async function load({ url }) {
   const tomorrow = getLocalDate(1);
   const maxDate = getLocalDate(6); // today + 6 days (Open-Meteo forecast limit)
 
+  // Earliest date with spot prices in DB
+  const todayOffset = getTzOffset(today);
+  const minPriceRow = db.prepare(
+    `SELECT MIN(date(datetime(ts, '+' || ? || ' hours'))) as d FROM spotty_prices`
+  ).get(todayOffset);
+  const minDate = minPriceRow?.d || today;
+
   // Get requested date from query param, default to tomorrow
   let targetDate = url.searchParams.get('date') || tomorrow;
 
   // Clamp to valid range
-  if (targetDate < today) targetDate = today;
+  if (targetDate < minDate) targetDate = minDate;
   if (targetDate > maxDate) targetDate = maxDate;
 
   const tzOffset = getTzOffset(targetDate);
@@ -167,6 +174,7 @@ export async function load({ url }) {
     targetDate,
     today,
     tomorrow,
+    minDate,
     maxDate,
     prices,
     inverters,

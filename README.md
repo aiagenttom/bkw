@@ -8,10 +8,13 @@ Ein lokales Solar-Monitoring-Dashboard für OpenDTU-Wechselrichter, gebaut mit *
 
 - **Live-Dashboard** – Echtzeit-Leistung, Temperatur, Ertrag pro Wechselrichter
 - **Historischer Verlauf** – Tages- und Monatsertrag als Balkendiagramme
+- **Prognose** – Mehrtages-Solarertragsprognose mit Wetterdaten (Open-Meteo) und EPEX Spotpreisen; Navigation zwischen Heute und den nächsten 6 Tagen sowie historischen Tagen
+- **Wetter-Archiv** – Stündliche Wetterdaten werden automatisch in der DB gespeichert und bleiben dauerhaft verfügbar
 - **Ersparnis-Berechnung** – Fixer Tarif (ct/kWh) oder live via [Spotty Energie](https://spottyenergie.at/) API
-- **Admin-Bereich** – Wechselrichter, Benutzer, Einstellungen, Logs
+- **Verbrauchsprofil** – Wochentagsbasiertes Lastprofil pro Wechselrichter für Eigenverbrauchsberechnung
+- **Admin-Bereich** – Wechselrichter, Benutzer, Einstellungen, Logs, Automations
 - **Automatische Synchronisation** – Konfigurierbares Intervall via node-cron
-- **Tages-Snapshots** – Automatisch täglich 23:55 Uhr
+- **Tages-Snapshots** – Automatisch täglich um 23:55 Uhr
 
 ---
 
@@ -19,20 +22,22 @@ Ein lokales Solar-Monitoring-Dashboard für OpenDTU-Wechselrichter, gebaut mit *
 
 | Layer | Technologie |
 |---|---|
-| Framework | SvelteKit 2 + Svelte 5 |
-| Runtime | Node.js 22 (built-in `node:sqlite`) |
-| Datenbank | SQLite (via `node:sqlite` – kein ORM) |
+| Framework | SvelteKit 2 + Svelte 4 |
+| Runtime | Node.js 20+ |
+| Datenbank | SQLite (via `better-sqlite3` – kein ORM) |
 | Adapter | `@sveltejs/adapter-node` |
 | CSS | Bootstrap 5 + Bootstrap Icons (CDN) |
-| Charts | Chart.js 4 (CDN, dynamisch geladen) |
+| Charts | Chart.js 4 (dynamisch geladen) |
 | Scheduler | node-cron |
 | Auth | bcryptjs, Cookie-Session (eigene SQLite-Implementierung) |
+| Wetter-API | [Open-Meteo](https://open-meteo.com/) (kostenlos, kein API-Key) |
+| Preise | [Spotty Energie](https://spottyenergie.at/) EPEX Spot API |
 
 ---
 
 ## Voraussetzungen
 
-- **Node.js ≥ 22** (wegen `node:sqlite` built-in)
+- **Node.js ≥ 20**
 - Kein externer Datenbankserver erforderlich
 
 ---
@@ -45,7 +50,7 @@ git clone git@github.com:aiagenttom/bkw.git
 cd bkw
 
 # Abhängigkeiten installieren
-npm install --legacy-peer-deps
+npm install
 ```
 
 ---
@@ -60,10 +65,7 @@ npm run dev
 
 ### Production Build
 ```bash
-# Build erzeugen (muss außerhalb von gemounteten FUSE-Dateisystemen ausgeführt werden)
 npm run build
-
-# Server starten
 npm run start
 ```
 Der Produktionsserver läuft standardmäßig auf Port **3000**.
@@ -95,7 +97,7 @@ Beim ersten Start wird automatisch ein Admin-Account erstellt:
 
 ## Konfiguration
 
-Alle Einstellungen sind im Admin-Bereich unter **Inverter Settings** zu finden:
+Alle Einstellungen sind im Admin-Bereich zu finden:
 
 | Einstellung | Beschreibung |
 |---|---|
@@ -103,8 +105,11 @@ Alle Einstellungen sind im Admin-Bereich unter **Inverter Settings** zu finden:
 | Sync Interval (min) | Wie oft Daten von OpenDTU geholt werden |
 | Auto-refresh (s) | Dashboard-Aktualisierungsintervall |
 | Tariff Mode | `fixed` (ct/kWh) oder `spotty` (live Börsenpreis) |
+| Fixed Price (ct/kWh) | Fixer Strompreis |
+| MwSt (%) | Mehrwertsteuer |
+| Netzgebühr (ct/kWh) | Netzkosten on top |
 | Spotty API URL | Endpunkt für Spotty Energie Preisabruf |
-| UTC Offset (h) | Zeitzone (1 = CET, 2 = CEST) |
+| Timezone | IANA-Zeitzone (z.B. `Europe/Vienna`) |
 
 Pro Wechselrichter kann der Tarif-Modus individuell überschrieben werden.
 
@@ -112,9 +117,36 @@ Pro Wechselrichter kann der Tarif-Modus individuell überschrieben werden.
 
 ## Datenbank
 
-Die SQLite-Datenbank wird beim ersten Start automatisch angelegt und migriert. Der Standardpfad ist `~/.bkw-data/bkw.db`.
+Die SQLite-Datenbank wird beim ersten Start automatisch angelegt und migriert. Standardpfad: `~/.bkw-data/bkw.db`.
 
-Für Backups genügt es, diese Datei zu kopieren (App sollte dabei gestoppt sein oder WAL-Mode muss unterstützt werden).
+Für Backups genügt es, diese Datei zu kopieren (App sollte dabei gestoppt sein).
+
+### Tabellen
+
+| Tabelle | Beschreibung |
+|---|---|
+| `inverters` | Wechselrichter-Konfiguration (kWp, API-Pfad, Farbe, Tarif) |
+| `bkw_history` | Minutengenaue Messwerte pro Wechselrichter |
+| `bkw_daily` | Tages-Snapshots (Ertrag, Ersparnis, Temperaturen) |
+| `spotty_prices` | EPEX Spot-Preise (15-min Slots, 13 Monate Aufbewahrung) |
+| `weather_hourly` | Stündliche Wetterdaten (GHI, Bewölkung, Temperatur) – dauerhaft gespeichert |
+| `weather_daily` | Tägliche Wetter-Zusammenfassung (Sonnenstunden, Min/Max Temperatur) |
+| `usage_profiles` | Verbrauchsprofile nach Wochentag und Stunde |
+| `app_settings` | Globale Konfiguration (Key-Value) |
+| `sessions` | Login-Sessions |
+| `activity_log` | Seitenaufrufe und Antwortzeiten |
+
+---
+
+## Automatische Hintergrundjobs (Cron)
+
+| Job | Zeitplan | Beschreibung |
+|---|---|---|
+| Inverter-Sync | Konfig (default: jede Minute) | OpenDTU-Daten abrufen und speichern |
+| Spotty-Preise | Jede Stunde (:05) | EPEX Spot-Preise aktualisieren |
+| Wetter-Sync | Jede Stunde (:15) | 7-Tage Open-Meteo Forecast speichern |
+| Tages-Snapshot | 23:55 täglich | Tagesertrag & Ersparnis berechnen |
+| Preis-Bereinigung | 23:55 täglich | Spotpreise älter als 13 Monate löschen |
 
 ---
 
@@ -126,16 +158,18 @@ src/
 ├── lib/
 │   ├── db.js             # Datenbankinitialisierung, Schema, Migrationen, Seeds
 │   ├── session.js        # Cookie-Session via SQLite
-│   └── sync.js           # OpenDTU-Sync, Spotty-Preise, Tages-Snapshots
+│   ├── sync.js           # OpenDTU-Sync, Spotty-Preise, Wetter, Tages-Snapshots
+│   └── tz.js             # DST-bewusste Timezone-Hilfsfunktionen
 └── routes/
     ├── +page.svelte      # Live-Dashboard
     ├── history/          # Historische Tagesdaten (Bar Charts)
+    ├── prognose/         # Solarertragsprognose + Wetter + Spotpreise (mehrtägig)
     ├── admin/            # Admin-Bereich (Auth-geschützt)
     │   ├── inverters/    # Wechselrichter & Global Settings
+    │   ├── usage-profile/# Verbrauchsprofile
     │   ├── daily/        # Tages-History Verwaltung
     │   ├── users/        # Benutzerverwaltung
-    │   └── ...           # Logs, Performance, Automations
-    ├── api/              # JSON-Endpunkte für Dashboard-Charts
+    │   └── ...           # Logs, Performance, Automations, Smart Meter
     ├── login/            # Login-Seite
     └── logout/           # Logout-Handler
 ```

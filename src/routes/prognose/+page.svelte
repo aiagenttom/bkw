@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   export let data;
 
-  const { tomorrow, prices, weather, predictions, currentHour, mwstPct, netzCt, priceMode, fixedPriceCt, timezone, weekday } = data;
+  const { targetDate, today, tomorrow, maxDate, prices, weather, predictions, currentHour, mwstPct, netzCt, priceMode, fixedPriceCt, timezone, weekday } = data;
   const dayNames = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
   const pricesAvailable = prices.length > 0;
@@ -19,15 +19,35 @@
   // Weather daily summary
   const daily = weather?.daily;
 
-  // Average cloud cover for solar hours
   const solarWeather = weather?.hourly?.filter(h => h.hour >= 5 && h.hour <= 21) || [];
   const avgCloud = solarWeather.length ? Math.round(solarWeather.reduce((s, h) => s + h.cloudCover, 0) / solarWeather.length) : null;
   const maxGhi = solarWeather.length ? Math.round(Math.max(...solarWeather.map(h => h.ghi))) : null;
 
-  // Format date nicely
+  // Date navigation helpers
+  function addDays(dateStr, n) {
+    const d = new Date(dateStr + 'T12:00:00');
+    d.setDate(d.getDate() + n);
+    return d.toISOString().substring(0, 10);
+  }
+
+  const prevDate = addDays(targetDate, -1);
+  const nextDate = addDays(targetDate, +1);
+  const canGoPrev = prevDate >= today;
+  const canGoNext = nextDate <= maxDate;
+
+  function dateLabel(dateStr) {
+    if (dateStr === today) return 'Heute';
+    if (dateStr === tomorrow) return 'Morgen';
+    return formatDate(dateStr);
+  }
+
   function formatDate(dateStr) {
     const d = new Date(dateStr + 'T12:00:00');
     return d.toLocaleDateString('de-AT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  function dateHref(dateStr) {
+    return `/prognose?date=${dateStr}`;
   }
 
   let ChartClass;
@@ -127,8 +147,38 @@
 
 <svelte:head><title>Prognose – BKW</title></svelte:head>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h4 class="fw-bold mb-0"><i class="bi bi-cloud-sun me-2"></i>Prognose – {formatDate(tomorrow)}</h4>
+<!-- Header with navigation -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="fw-bold mb-0"><i class="bi bi-cloud-sun me-2"></i>Prognose</h4>
+</div>
+
+<!-- Date navigation -->
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+  {#if canGoPrev}
+    <a href={dateHref(prevDate)} class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-chevron-left"></i>
+    </a>
+  {:else}
+    <button class="btn btn-outline-secondary btn-sm" disabled>
+      <i class="bi bi-chevron-left"></i>
+    </button>
+  {/if}
+
+  <!-- Quick links -->
+  <a href={dateHref(today)} class="btn btn-sm {targetDate === today ? 'btn-primary' : 'btn-outline-primary'}">Heute</a>
+  <a href={dateHref(tomorrow)} class="btn btn-sm {targetDate === tomorrow ? 'btn-primary' : 'btn-outline-primary'}">Morgen</a>
+
+  <span class="fw-semibold text-body ms-1">{formatDate(targetDate)}</span>
+
+  {#if canGoNext}
+    <a href={dateHref(nextDate)} class="btn btn-outline-secondary btn-sm ms-auto">
+      <i class="bi bi-chevron-right"></i>
+    </a>
+  {:else}
+    <button class="btn btn-outline-secondary btn-sm ms-auto" disabled>
+      <i class="bi bi-chevron-right"></i>
+    </button>
+  {/if}
 </div>
 
 <!-- Status badges -->
@@ -136,7 +186,7 @@
   {#if pricesAvailable}
     <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Spotpreise verfügbar ({prices.length}h)</span>
   {:else}
-    <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Spotpreise ab ~14 Uhr verfügbar</span>
+    <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Spotpreise {targetDate === today ? 'ab ~14 Uhr verfügbar' : 'nicht verfügbar'}</span>
   {/if}
   {#if weatherAvailable}
     <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Wetterdaten geladen</span>
@@ -245,7 +295,7 @@
   {#if pricesAvailable}
   <div class="col-12 col-lg-6">
     <div class="card shadow-sm">
-      <div class="card-header fw-semibold"><i class="bi bi-currency-euro me-2"></i>Spotpreis morgen</div>
+      <div class="card-header fw-semibold"><i class="bi bi-currency-euro me-2"></i>Spotpreis {dateLabel(targetDate)}</div>
       <div class="card-body">
         <canvas id="price-chart"></canvas>
       </div>

@@ -67,8 +67,8 @@
           </li>
         {:else}
           <li class="nav-item">
-            <a class="btn btn-outline-light btn-sm" href="/login">
-              <i class="bi bi-box-arrow-in-right me-1"></i>Login
+            <a class="btn btn-outline-light btn-sm" href="/login" title="Login">
+              <i class="bi bi-box-arrow-in-right"></i>
             </a>
           </li>
         {/if}

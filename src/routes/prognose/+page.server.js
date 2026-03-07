@@ -5,38 +5,35 @@ function getSetting(key) {
   return db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key)?.value;
 }
 
-/** Get tomorrow's date string in local timezone */
-function getLocalTomorrow() {
+/** Get date string offset by `days` from now in local timezone */
+function getLocalDate(offsetDays = 0) {
   const tz = getTimezone();
-  const tomorrow = new Date(Date.now() + 86_400_000);
+  const d = new Date(Date.now() + offsetDays * 86_400_000);
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(tomorrow);
+  }).formatToParts(d);
   const y = parts.find(p => p.type === 'year').value;
   const m = parts.find(p => p.type === 'month').value;
-  const d = parts.find(p => p.type === 'day').value;
-  return `${y}-${m}-${d}`;
+  const day = parts.find(p => p.type === 'day').value;
+  return `${y}-${m}-${day}`;
 }
 
-/** Get today's date string in local timezone */
-function getLocalToday() {
+export async function load({ url }) {
   const tz = getTimezone();
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(new Date());
-  const y = parts.find(p => p.type === 'year').value;
-  const m = parts.find(p => p.type === 'month').value;
-  const d = parts.find(p => p.type === 'day').value;
-  return `${y}-${m}-${d}`;
-}
+  const today = getLocalDate(0);
+  const tomorrow = getLocalDate(1);
+  const maxDate = getLocalDate(6); // today + 6 days (Open-Meteo forecast limit)
 
-export async function load() {
-  const tomorrow = getLocalTomorrow();
-  const today = getLocalToday();
-  const tz = getTimezone();
-  const tzOffset = getTzOffset(tomorrow);
+  // Get requested date from query param, default to tomorrow
+  let targetDate = url.searchParams.get('date') || tomorrow;
 
-  // --- 1) Spot prices for tomorrow (hourly averages) ---
+  // Clamp to valid range
+  if (targetDate < today) targetDate = today;
+  if (targetDate > maxDate) targetDate = maxDate;
+
+  const tzOffset = getTzOffset(targetDate);
+
+  // --- 1) Spot prices for target date (hourly averages) ---
   const prices = db.prepare(`
     SELECT
       CAST(strftime('%H', datetime(ts, '+' || ? || ' hours')) AS INTEGER) AS hour,
@@ -45,7 +42,7 @@ export async function load() {
     WHERE date(datetime(ts, '+' || ? || ' hours')) = ?
     GROUP BY hour
     ORDER BY hour
-  `).all(tzOffset, tzOffset, tomorrow);
+  `).all(tzOffset, tzOffset, targetDate);
 
   // --- 2) Inverters with kWp ---
   const inverters = db.prepare('SELECT id, name, color, kwp, enabled FROM inverters WHERE enabled = 1 ORDER BY name').all();
@@ -56,29 +53,27 @@ export async function load() {
   const priceMode = getSetting('price_mode') || 'fixed';
   const fixedPriceCt = parseFloat(getSetting('fixed_price_ct') || '30');
 
-  // --- 4) Fetch weather from Open-Meteo (live) ---
+  // --- 4) Fetch weather from Open-Meteo (7-day forecast) ---
   let weather = null;
   try {
     const weatherUrl = 'https://api.open-meteo.com/v1/forecast'
       + '?latitude=48.08&longitude=16.28'
       + '&hourly=shortwave_radiation,direct_radiation,cloud_cover,temperature_2m,windspeed_10m'
       + '&daily=sunshine_duration,shortwave_radiation_sum,temperature_2m_max,temperature_2m_min'
-      + '&forecast_days=2'
+      + '&forecast_days=7'
       + '&timezone=' + encodeURIComponent(tz);
 
     const resp = await fetch(weatherUrl, { signal: AbortSignal.timeout(8000) });
     if (resp.ok) {
       const data = await resp.json();
 
-      // Find tomorrow's index in daily arrays
-      const tomorrowIdx = data.daily?.time?.indexOf(tomorrow) ?? -1;
+      const targetIdx = data.daily?.time?.indexOf(targetDate) ?? -1;
 
-      // Filter hourly data for tomorrow (hours 0-23)
-      const hourlyTomorrow = [];
+      const hourlyTarget = [];
       if (data.hourly?.time) {
         for (let i = 0; i < data.hourly.time.length; i++) {
-          if (data.hourly.time[i].startsWith(tomorrow)) {
-            hourlyTomorrow.push({
+          if (data.hourly.time[i].startsWith(targetDate)) {
+            hourlyTarget.push({
               hour: parseInt(data.hourly.time[i].substring(11, 13)),
               ghi: data.hourly.shortwave_radiation?.[i] ?? 0,
               directRadiation: data.hourly.direct_radiation?.[i] ?? 0,
@@ -90,24 +85,22 @@ export async function load() {
         }
       }
 
-      // Daily summary for tomorrow
-      const dailySummary = tomorrowIdx >= 0 ? {
-        sunshineDurationH: Math.round((data.daily.sunshine_duration?.[tomorrowIdx] ?? 0) / 3600 * 10) / 10,
-        radiationSum: data.daily.shortwave_radiation_sum?.[tomorrowIdx] ?? 0,
-        tempMax: data.daily.temperature_2m_max?.[tomorrowIdx] ?? null,
-        tempMin: data.daily.temperature_2m_min?.[tomorrowIdx] ?? null,
+      const dailySummary = targetIdx >= 0 ? {
+        sunshineDurationH: Math.round((data.daily.sunshine_duration?.[targetIdx] ?? 0) / 3600 * 10) / 10,
+        radiationSum: data.daily.shortwave_radiation_sum?.[targetIdx] ?? 0,
+        tempMax: data.daily.temperature_2m_max?.[targetIdx] ?? null,
+        tempMin: data.daily.temperature_2m_min?.[targetIdx] ?? null,
       } : null;
 
-      weather = { hourly: hourlyTomorrow, daily: dailySummary };
+      weather = { hourly: hourlyTarget, daily: dailySummary };
     }
   } catch (e) {
     console.warn('[prognose] weather fetch failed:', e.message);
   }
 
-  // --- 5) Usage profiles for tomorrow's weekday ---
-  // JavaScript getDay(): 0=Sun,1=Mon,...,6=Sat → convert to our 0=Mon,...,6=Sun
-  const tomorrowDate = new Date(tomorrow + 'T12:00:00');
-  const jsDay = tomorrowDate.getDay(); // 0=Sun
+  // --- 5) Usage profiles for target date's weekday ---
+  const targetDateObj = new Date(targetDate + 'T12:00:00');
+  const jsDay = targetDateObj.getDay(); // 0=Sun
   const weekday = jsDay === 0 ? 6 : jsDay - 1; // 0=Mon,...,6=Sun
 
   const usageRows = db.prepare('SELECT inverter_id, hour, kw FROM usage_profiles WHERE weekday = ?').all(weekday);
@@ -133,18 +126,15 @@ export async function load() {
     const usageProfile = usageByInverter[inv.id];
     const hasProfile = usageProfile && usageProfile.some(v => v > 0);
 
-    // For each solar hour, calculate yield
     const solarHours = weather?.hourly?.filter(h => h.hour >= 5 && h.hour <= 21) || [];
     for (const h of solarHours) {
       const yieldWh = h.ghi * inv.kwp * performanceRatio;
       totalYieldWh += yieldWh;
 
-      // Eigenverbrauch: min(yield, usage) per hour
-      const usageWh = hasProfile ? usageProfile[h.hour] * 1000 : yieldWh; // if no profile: 100% usage
+      const usageWh = hasProfile ? usageProfile[h.hour] * 1000 : yieldWh;
       const eigenverbrauchWh = Math.min(yieldWh, usageWh);
       totalEigenverbrauchWh += eigenverbrauchWh;
 
-      // Savings only on Eigenverbrauch
       const priceCt = prices.find(p => p.hour === h.hour)?.avg_price ?? (priceMode === 'spotty' ? null : fixedPriceCt);
       if (priceCt != null) {
         const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
@@ -167,15 +157,17 @@ export async function load() {
     });
   }
 
-  // --- 7) Current hour for "data available" check ---
+  // --- 7) Current hour ---
   const nowParts = new Intl.DateTimeFormat('en-US', {
     timeZone: tz, hour: 'numeric', hour12: false
   }).formatToParts(new Date());
   const currentHour = parseInt(nowParts.find(p => p.type === 'hour')?.value ?? '0');
 
   return {
-    tomorrow,
+    targetDate,
     today,
+    tomorrow,
+    maxDate,
     prices,
     inverters,
     weather,

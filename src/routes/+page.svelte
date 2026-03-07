@@ -3,8 +3,10 @@
   export let data;
 
   const { inverters, summary, settings, today } = data;
-  let liveData     = data.liveData;
-  let todaySavings = data.todaySavings;
+  let liveData            = data.liveData;
+  let todaySavings        = data.todaySavings;
+  let todaySavingsProfile = data.todaySavingsProfile;
+  let hasProfile          = data.hasProfile;
   let selInv    = 'all';
   let selDate   = today;
   let lastUpdate = '';
@@ -180,7 +182,11 @@
       // Re-fetch savings from server (lightweight endpoint)
       const savR = await fetch('/api/today-savings');
       const savJ = await savR.json();
-      if (savJ.success) todaySavings = savJ.data;
+      if (savJ.success) {
+        todaySavings        = savJ.data;
+        todaySavingsProfile = savJ.savingsProfile;
+        hasProfile          = savJ.hasProfile;
+      }
 
       // Spotty price curve for selected day (filtered to 04:30–22:30, incl. MwSt + Netzgebühr)
       const priceR = await fetch(`/api/prices?date=${selDate}`);
@@ -310,18 +316,31 @@
           </div>
         </div>
         <!-- Savings row -->
-        <div class="mt-2 pt-2 border-top d-flex justify-content-between align-items-center">
-          <small class="text-muted">
-            <i class="bi bi-currency-euro me-1"></i>Ersparnis bei 100% Nutzung
-            {#if effectiveMode === 'spotty'}
-              <span class="badge bg-primary ms-1" style="font-size:.65rem">⚡ Spot</span>
-            {:else}
-              <span class="badge bg-secondary ms-1" style="font-size:.65rem">🔒 {effectiveFixed} ct</span>
-            {/if}
-          </small>
-          <span class="fw-bold text-success">
-            {sav != null ? '€\u202f' + sav.toFixed(2) : '–'}
-          </span>
+        <div class="mt-2 pt-2 border-top">
+          <div class="d-flex justify-content-between align-items-center">
+            <small class="text-muted">
+              <i class="bi bi-currency-euro me-1"></i>Ersparnis (100% Nutzung)
+              {#if effectiveMode === 'spotty'}
+                <span class="badge bg-primary ms-1" style="font-size:.65rem">Spot</span>
+              {:else}
+                <span class="badge bg-secondary ms-1" style="font-size:.65rem">{effectiveFixed} ct</span>
+              {/if}
+            </small>
+            <span class="fw-bold text-success">
+              {sav != null ? '€\u202f' + sav.toFixed(2) : '–'}
+            </span>
+          </div>
+          {#if hasProfile?.[inv.name]}
+          {@const profSav = todaySavingsProfile?.[inv.name]}
+          <div class="d-flex justify-content-between align-items-center mt-1">
+            <small class="text-muted">
+              <i class="bi bi-bar-chart-steps me-1"></i>Ersparnis laut Profil
+            </small>
+            <span class="fw-bold text-primary">
+              {profSav != null ? '€\u202f' + profSav.toFixed(2) : '–'}
+            </span>
+          </div>
+          {/if}
         </div>
         {#if d.synced_at}
           <div class="text-muted mt-1" style="font-size:.7rem">Synced: {toLocalTime(d.synced_at)}</div>

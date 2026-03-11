@@ -175,17 +175,28 @@
       });
 
       // Refresh live data + savings
-      const live = await fetch('/api/live');
-      const lj = await live.json();
-      if (lj.success) liveData = lj.data;
+      // For today: use the live API (real-time values from inverters)
+      // For past dates: use the last recorded DB values for that day
+      if (selDate === today) {
+        const live = await fetch('/api/live');
+        const lj = await live.json();
+        if (lj.success) liveData = lj.data;
 
-      // Re-fetch savings from server (lightweight endpoint)
-      const savR = await fetch('/api/today-savings');
-      const savJ = await savR.json();
-      if (savJ.success) {
-        todaySavings        = savJ.data;
-        todaySavingsProfile = savJ.savingsProfile;
-        hasProfile          = savJ.hasProfile;
+        // Re-fetch savings from server (lightweight endpoint)
+        const savR = await fetch('/api/today-savings');
+        const savJ = await savR.json();
+        if (savJ.success) {
+          todaySavings        = savJ.data;
+          todaySavingsProfile = savJ.savingsProfile;
+          hasProfile          = savJ.hasProfile;
+        }
+      } else {
+        const histR = await fetch(`/api/historical-live?date=${selDate}`);
+        const histJ = await histR.json();
+        if (histJ.success) {
+          liveData     = histJ.data;
+          todaySavings = histJ.savings;
+        }
       }
 
       // Spotty price curve for selected day (filtered to 04:30–22:30, incl. MwSt + Netzgebühr)
@@ -293,8 +304,11 @@
           <h6 class="card-title mb-0 fw-bold">
             <i class="bi bi-lightning-fill me-1" style="color:{inv.color}"></i>{inv.name}
           </h6>
-          <span class="badge" class:bg-success={d.reachable} class:bg-danger={!d.reachable}>
-            {d.reachable ? 'Online' : 'Offline'}
+          <span class="badge"
+            class:bg-success={d.reachable != null && d.reachable}
+            class:bg-danger={d.reachable != null && !d.reachable}
+            class:bg-secondary={d.reachable == null}>
+            {d.reachable == null ? 'Archiv' : (d.reachable ? 'Online' : 'Offline')}
           </span>
         </div>
         <div class="row row-cols-2 g-1">

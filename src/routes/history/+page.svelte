@@ -4,7 +4,7 @@
   import { page } from '$app/stores';
   export let data;
 
-  const { inverters, dateSet, byDate, byInverter, monthly, months } = data;
+  const { inverters, dateSet, byDate, byInverter, monthly, months, hasSavingsProfile } = data;
 
   // Colors per inverter
   function hexToRgba(hex, alpha) {
@@ -96,6 +96,22 @@
       charts.savings.data = { labels, datasets: savingsDatasets };
       charts.savings.update('none');
     }
+
+    // ── Profile savings datasets ──────────────────────────────────────────────
+    if (charts.savingsProfile) {
+      const profileDatasets = invs.map(inv => ({
+        label: inv.name,
+        data:  labels.map(d => {
+          const s = byInverter[inv.name]?.[d]?.savings_profile_eur ?? 0;
+          return s ? parseFloat(s.toFixed(4)) : null;
+        }),
+        backgroundColor: INV_COLORS[inv.name]?.fill || '#888',
+        borderColor:     INV_COLORS[inv.name]?.solid || '#888',
+        borderWidth: 1, borderRadius: 2,
+      }));
+      charts.savingsProfile.data = { labels, datasets: profileDatasets };
+      charts.savingsProfile.update('none');
+    }
   }
 
   // React to inverter filter changes
@@ -137,6 +153,12 @@
 
     if (hasSavings && document.getElementById('cSavings')) {
       charts.savings = new Chart(document.getElementById('cSavings'), {
+        type: 'bar', data: { labels: [], datasets: [] }, options: stackedBarOpts('€'),
+      });
+    }
+
+    if (hasSavingsProfile && document.getElementById('cSavingsProfile')) {
+      charts.savingsProfile = new Chart(document.getElementById('cSavingsProfile'), {
         type: 'bar', data: { labels: [], datasets: [] }, options: stackedBarOpts('€'),
       });
     }
@@ -201,10 +223,22 @@
 {#if hasSavings}
 <div class="card shadow-sm mb-4">
   <div class="card-header fw-semibold">
-    <i class="bi bi-currency-euro text-success me-2"></i>Tägliche Ersparnis (€)
+    <i class="bi bi-currency-euro text-success me-2"></i>Tägliche Ersparnis – 100% Eigenverbrauch (€)
   </div>
   <div class="card-body" style="min-height:260px">
     <canvas id="cSavings" style="max-height:260px"></canvas>
+  </div>
+</div>
+{/if}
+
+<!-- Profile savings chart (only if usage profiles are configured) -->
+{#if hasSavingsProfile}
+<div class="card shadow-sm mb-4">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-person-fill text-primary me-2"></i>Tägliche Ersparnis – laut Verbrauchsprofil (€)
+  </div>
+  <div class="card-body" style="min-height:260px">
+    <canvas id="cSavingsProfile" style="max-height:260px"></canvas>
   </div>
 </div>
 {/if}
@@ -224,7 +258,8 @@
               <th>{inv.name}</th>
             {/each}
             {#if filteredInverters.length > 1}<th class="text-warning">Gesamt</th>{/if}
-            {#if hasSavings}<th class="text-success">Ersparnis</th>{/if}
+            {#if hasSavings}<th class="text-success">Ersparnis (100%)</th>{/if}
+            {#if hasSavingsProfile}<th class="text-primary">Ersparnis (Profil)</th>{/if}
           </tr>
         </thead>
         <tbody>
@@ -232,6 +267,7 @@
           {@const row = monthByInv[month] ?? {}}
           {@const totalWh  = filteredInverters.reduce((s,i) => s + (row[i.name]?.total_wh  ?? 0), 0)}
           {@const totalSav = filteredInverters.reduce((s,i) => s + (row[i.name]?.total_savings ?? 0), 0)}
+          {@const totalSavProfile = filteredInverters.reduce((s,i) => s + (row[i.name]?.total_savings_profile ?? 0), 0)}
           <tr>
             <td class="fw-semibold">{month}</td>
             {#each filteredInverters as inv}
@@ -239,6 +275,7 @@
             {/each}
             {#if filteredInverters.length > 1}<td class="fw-bold text-warning">{fmtKwh(totalWh)}</td>{/if}
             {#if hasSavings}<td class="fw-bold text-success">{fmtEur(totalSav)}</td>{/if}
+            {#if hasSavingsProfile}<td class="fw-bold text-primary">{fmtEur(totalSavProfile)}</td>{/if}
           </tr>
           {/each}
         </tbody>

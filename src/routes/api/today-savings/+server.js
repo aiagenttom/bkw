@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import db from '$lib/db.js';
 import { getTzOffset, getLocalToday } from '$lib/tz.js';
+import { simulatePowerbankSavings, loadPowerbanks } from '$lib/powerbank.js';
 
 export function GET() {
   const settings = Object.fromEntries(
@@ -71,6 +72,7 @@ export function GET() {
 
   const savingsProfile = {};
   const hasProfile = {};
+  const powerbanks = loadPowerbanks(db);
 
   for (const inv of inverters) {
     const profile = usageByInverter[inv.id];
@@ -90,13 +92,19 @@ export function GET() {
     const mode    = inv.price_mode ?? globalMode;
     const fixedCt = inv.fixed_price_ct ?? globalFixed;
     let totalEur  = 0;
+    const hourlyData = [];
 
     for (const h of hourlyYield) {
       const eigenverbrauchWh = Math.min(h.avg_w, profile[h.hour] * 1000);
       const priceCt = mode === 'spotty' ? (hourlySpot[h.hour] ?? fixedCt) : fixedCt;
       const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
       totalEur += eigenverbrauchWh / 1000 * totalCtPerKwh / 100;
+      hourlyData.push({ yieldWh: h.avg_w, profileWh: profile[h.hour] * 1000, priceCt });
     }
+
+    // Powerbank-Zusatzersparnis
+    const pb = powerbanks.get(inv.id);
+    if (pb) totalEur += simulatePowerbankSavings(hourlyData, pb.capacityWh, pb.dischargeW, netzCt, mwstPct);
 
     savingsProfile[inv.name] = parseFloat(totalEur.toFixed(4));
   }

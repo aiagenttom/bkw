@@ -1,5 +1,6 @@
 import db from '$lib/db.js';
 import { getTzOffset, getTimezone } from '$lib/tz.js';
+import { simulatePowerbankSavings, loadPowerbanks } from '$lib/powerbank.js';
 
 function getSetting(key) {
   return db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key)?.value;
@@ -171,13 +172,14 @@ export async function load({ url }) {
     usageByInverter[r.inverter_id][r.hour] = r.kw;
   }
 
-  // --- 6) Calculate predictions with Eigenverbrauch ---
+  // --- 6) Calculate predictions with Eigenverbrauch + Powerbank ---
   const performanceRatio = 0.80;
   const predictions = [];
+  const powerbanks = loadPowerbanks(db);
 
   for (const inv of inverters) {
     if (!inv.kwp || inv.kwp <= 0) {
-      predictions.push({ name: inv.name, color: inv.color, kwp: inv.kwp || 0, yieldKwh: null, savingsEur: null, eigenverbrauchKwh: null, einspeisungKwh: null });
+      predictions.push({ name: inv.name, color: inv.color, kwp: inv.kwp || 0, yieldKwh: null, savingsEur: null, eigenverbrauchKwh: null, einspeisungKwh: null, batteryKwh: null });
       continue;
     }
 
@@ -186,6 +188,8 @@ export async function load({ url }) {
     let totalSavingsEur = 0;
     const usageProfile = usageByInverter[inv.id];
     const hasProfile = usageProfile && usageProfile.some(v => v > 0);
+    const pb = powerbanks.get(inv.id);
+    const hourlyData = []; // für Powerbank-Simulation
 
     const solarHours = weather?.hourly?.filter(h => h.hour >= 5 && h.hour <= 21) || [];
     for (const h of solarHours) {
@@ -200,7 +204,29 @@ export async function load({ url }) {
       if (priceCt != null) {
         const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
         totalSavingsEur += (eigenverbrauchWh / 1000) * totalCtPerKwh / 100;
+        if (hasProfile && pb) {
+          hourlyData.push({ yieldWh, profileWh: usageWh, priceCt });
+        }
       }
+    }
+
+    // Powerbank-Zusatzersparnis und -Eigenverbrauch
+    let batteryKwh = null;
+    if (hasProfile && pb && hourlyData.length > 0) {
+      // Simulation nochmal für Eigenverbrauch-Statistik
+      let batteryEigenWh = 0;
+      let soc = 0;
+      for (const { yieldWh, profileWh } of hourlyData) {
+        const directEigen = Math.min(yieldWh, profileWh);
+        const excessPv    = Math.max(0, yieldWh - directEigen);
+        soc = Math.min(soc + Math.min(excessPv, pb.capacityWh - soc), pb.capacityWh);
+        const dischargeWh = Math.min(pb.dischargeW, soc);
+        soc -= dischargeWh;
+        batteryEigenWh += Math.min(dischargeWh, Math.max(0, profileWh - directEigen));
+      }
+      batteryKwh = Math.round(batteryEigenWh / 1000 * 100) / 100;
+      totalEigenverbrauchWh += batteryEigenWh;
+      totalSavingsEur += simulatePowerbankSavings(hourlyData, pb.capacityWh, pb.dischargeW, netzCt, mwstPct);
     }
 
     const yieldKwh = Math.round(totalYieldWh / 1000 * 100) / 100;
@@ -212,8 +238,9 @@ export async function load({ url }) {
       kwp: inv.kwp,
       yieldKwh,
       eigenverbrauchKwh: hasProfile ? eigenverbrauchKwh : null,
-      einspeisungKwh: hasProfile ? Math.round((yieldKwh - eigenverbrauchKwh) * 100) / 100 : null,
+      einspeisungKwh: hasProfile ? Math.max(0, Math.round((yieldKwh - eigenverbrauchKwh) * 100) / 100) : null,
       savingsEur: Math.round(totalSavingsEur * 100) / 100,
+      batteryKwh,
       hasProfile,
     });
   }

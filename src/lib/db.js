@@ -136,6 +136,29 @@ db.exec(`
     kw          REAL NOT NULL DEFAULT 0,
     PRIMARY KEY (inverter_id, weekday, hour)
   );
+
+  CREATE TABLE IF NOT EXISTS powerbanks (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    inverter_id INTEGER NOT NULL UNIQUE REFERENCES inverters(id) ON DELETE CASCADE,
+    capacity_wh REAL    NOT NULL DEFAULT 1600,  -- Speicherkapazität in Wh
+    discharge_w REAL    NOT NULL DEFAULT 200,   -- Konstante Abgabeleistung in W
+    enabled     INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+// Anker SOLIX Powerbank live readings
+db.exec(`
+  CREATE TABLE IF NOT EXISTS anker_readings (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_sn   TEXT,
+    soc         REAL,          -- Ladestand in % (0-100)
+    charge_w    REAL,          -- Ladeleistung in W
+    discharge_w REAL,          -- Entladeleistung in W
+    state       TEXT,          -- z.B. "charging", "discharging", "standby"
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_anker_readings_time ON anker_readings(created_at);
 `);
 
 // Weather storage tables
@@ -210,6 +233,7 @@ for (const [k, v, l] of [
   ['fixed_price_ct', '30',                           'Fixed tariff (ct/kWh)'],
   ['mwst_percent',   '20',                           'MwSt (%)'],
   ['netzgebuehr_ct', '0',                            'Netzgebühr (ct/kWh)'],
+  ['anker_service_url', 'http://localhost:7331',     'Anker Solix Microservice URL'],
 ]) db.prepare('INSERT OR IGNORE INTO app_settings (key, value, label) VALUES (?,?,?)').run(k, v, l);
 
 // Demo history

@@ -1,5 +1,6 @@
 import db from '$lib/db.js';
 import { getTzOffset } from '$lib/tz.js';
+import { simulatePowerbankSavings, loadPowerbanks } from '$lib/powerbank.js';
 
 export async function load({ url }) {
   // How many months back to show (default: 3)
@@ -85,6 +86,7 @@ export async function load({ url }) {
   }
 
   const hasSavingsProfile = profileRows.some(r => r.kw > 0);
+  const powerbanks = loadPowerbanks(db);
 
   if (hasSavingsProfile && dateSet.length > 0) {
     // Group dates by tz offset (typically 2 groups: CET=1, CEST=2)
@@ -108,6 +110,8 @@ export async function load({ url }) {
         GROUP BY day, inverter, hour
       `).all(tzInt, tzInt, tzInt, ...dates);
 
+      // Stündliche Daten nach day+inverter gruppieren (für Powerbank-Simulation)
+      const hourlyByDayInv = {};
       for (const h of hourlyRows) {
         const invId = invIdByName[h.inverter];
         if (invId == null) continue;
@@ -119,7 +123,6 @@ export async function load({ url }) {
 
         const profileWh = profile[h.hour] * 1000;
         const eigenWh   = Math.min(h.avg_w ?? 0, profileWh);
-        if (eigenWh <= 0) continue;
 
         const dailyRow = byInverter[h.inverter]?.[h.day];
         const inv      = invSettings[h.inverter];
@@ -137,6 +140,29 @@ export async function load({ url }) {
         if (byDate[h.day]) {
           byDate[h.day].savings_profile_eur = (byDate[h.day].savings_profile_eur ?? 0) + eur;
         }
+
+        // Für Powerbank-Simulation stündliche Daten sammeln
+        if (powerbanks.has(invId)) {
+          const key = `${h.day}|${h.inverter}`;
+          (hourlyByDayInv[key] ??= []).push({ hour: h.hour, yieldWh: h.avg_w ?? 0, profileWh, priceCt });
+        }
+      }
+
+      // Powerbank-Zusatzersparnis pro Tag+Inverter addieren
+      for (const [key, hourlyData] of Object.entries(hourlyByDayInv)) {
+        const [day, invName] = key.split('|');
+        const invId = invIdByName[invName];
+        const pb = powerbanks.get(invId);
+        if (!pb) continue;
+
+        hourlyData.sort((a, b) => a.hour - b.hour);
+        const pbEur = simulatePowerbankSavings(hourlyData, pb.capacityWh, pb.dischargeW, netzCt, mwstPct);
+        if (pbEur <= 0) continue;
+
+        if (byInverter[invName]?.[day])
+          byInverter[invName][day].savings_profile_eur = (byInverter[invName][day].savings_profile_eur ?? 0) + pbEur;
+        if (byDate[day])
+          byDate[day].savings_profile_eur = (byDate[day].savings_profile_eur ?? 0) + pbEur;
       }
     }
 

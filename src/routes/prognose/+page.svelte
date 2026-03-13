@@ -18,8 +18,10 @@
   $: totalYield = predictions.filter(p => p.yieldKwh != null).reduce((s, p) => s + p.yieldKwh, 0);
   $: totalSavings = predictions.filter(p => p.savingsEur != null).reduce((s, p) => s + p.savingsEur, 0);
   $: hasAnyProfile = predictions.some(p => p.hasProfile);
+  $: hasAnyBattery = predictions.some(p => p.batteryKwh != null && p.batteryKwh > 0);
   $: totalEigenverbrauch = predictions.filter(p => p.eigenverbrauchKwh != null).reduce((s, p) => s + p.eigenverbrauchKwh, 0);
   $: totalEinspeisung = predictions.filter(p => p.einspeisungKwh != null).reduce((s, p) => s + p.einspeisungKwh, 0);
+  $: totalBattery = predictions.filter(p => p.batteryKwh != null).reduce((s, p) => s + p.batteryKwh, 0);
 
   // Weather daily summary
   $: daily = weather?.daily;
@@ -261,6 +263,7 @@
           <th class="text-end">Ertrag</th>
           {#if hasAnyProfile}
             <th class="text-end">Eigenverbr.</th>
+            {#if hasAnyBattery}<th class="text-end">Batterie</th>{/if}
             <th class="text-end">Einspeisung</th>
           {/if}
           <th class="text-end">Ersparnis</th>
@@ -274,6 +277,13 @@
           <td class="text-end fw-bold">{p.yieldKwh != null ? `${p.yieldKwh.toFixed(1)} kWh` : '–'}</td>
           {#if hasAnyProfile}
             <td class="text-end text-primary">{p.eigenverbrauchKwh != null ? `${p.eigenverbrauchKwh.toFixed(1)} kWh` : '–'}</td>
+            {#if hasAnyBattery}
+              <td class="text-end text-warning">
+                {#if p.batteryKwh != null && p.batteryKwh > 0}
+                  <i class="bi bi-battery-charging" style="font-size:.75rem"></i> {p.batteryKwh.toFixed(1)} kWh
+                {:else}–{/if}
+              </td>
+            {/if}
             <td class="text-end text-muted">{p.einspeisungKwh != null ? `${p.einspeisungKwh.toFixed(1)} kWh` : '–'}</td>
           {/if}
           <td class="text-end fw-bold text-success">{p.savingsEur != null ? `€ ${p.savingsEur.toFixed(2)}` : '–'}</td>
@@ -285,6 +295,9 @@
           <td class="text-end">{totalYield.toFixed(1)} kWh</td>
           {#if hasAnyProfile}
             <td class="text-end text-primary">{totalEigenverbrauch.toFixed(1)} kWh</td>
+            {#if hasAnyBattery}
+              <td class="text-end text-warning"><i class="bi bi-battery-charging" style="font-size:.75rem"></i> {totalBattery.toFixed(1)} kWh</td>
+            {/if}
             <td class="text-end text-muted">{totalEinspeisung.toFixed(1)} kWh</td>
           {/if}
           <td class="text-end text-success">€ {totalSavings.toFixed(2)}</td>
@@ -336,9 +349,12 @@
 
 <!-- Market insight -->
 {#if pricesAvailable}
-{@const avgPrice = prices.reduce((s, p) => s + p.avg_price, 0) / prices.length}
+{@const applyTax = (ct) => (ct + netzCt) * (1 + mwstPct / 100)}
+{@const avgPriceRaw = prices.reduce((s, p) => s + p.avg_price, 0) / prices.length}
+{@const avgPrice = applyTax(avgPriceRaw)}
 {@const solarPrices = prices.filter(p => p.hour >= 8 && p.hour <= 16)}
-{@const avgSolarPrice = solarPrices.length ? solarPrices.reduce((s, p) => s + p.avg_price, 0) / solarPrices.length : null}
+{@const avgSolarPriceRaw = solarPrices.length ? solarPrices.reduce((s, p) => s + p.avg_price, 0) / solarPrices.length : null}
+{@const avgSolarPrice = avgSolarPriceRaw != null ? applyTax(avgSolarPriceRaw) : null}
 <div class="card shadow-sm mb-4">
   <div class="card-header fw-semibold"><i class="bi bi-graph-down me-2"></i>Markt-Einschätzung</div>
   <div class="card-body">
@@ -346,20 +362,22 @@
       <div class="col-6 col-md-3 text-center mb-2">
         <div class="text-muted small">Ø Spotpreis (ganztags)</div>
         <div class="fs-5 fw-bold">{avgPrice.toFixed(1)} ct/kWh</div>
+        <div class="text-muted" style="font-size:0.7rem">inkl. Netzgeb. + MwSt</div>
       </div>
       {#if avgSolarPrice != null}
       <div class="col-6 col-md-3 text-center mb-2">
         <div class="text-muted small">Ø Spotpreis (8–16h)</div>
         <div class="fs-5 fw-bold">{avgSolarPrice.toFixed(1)} ct/kWh</div>
+        <div class="text-muted" style="font-size:0.7rem">inkl. Netzgeb. + MwSt</div>
       </div>
       {/if}
       <div class="col-12 col-md-6 mb-2">
         <div class="text-muted small mb-1">Bedeutung</div>
-        {#if avgSolarPrice != null && avgSolarPrice < 5}
+        {#if avgSolarPriceRaw != null && avgSolarPriceRaw < 5}
           <span class="badge bg-success">Sehr niedrig → Viel Wind-/Solarenergie im Netz erwartet</span>
-        {:else if avgSolarPrice != null && avgSolarPrice < 10}
+        {:else if avgSolarPriceRaw != null && avgSolarPriceRaw < 10}
           <span class="badge bg-info text-dark">Niedrig → Gutes Angebot an erneuerbarer Energie</span>
-        {:else if avgSolarPrice != null && avgSolarPrice < 20}
+        {:else if avgSolarPriceRaw != null && avgSolarPriceRaw < 20}
           <span class="badge bg-warning text-dark">Mittel → Normales Preisniveau</span>
         {:else}
           <span class="badge bg-danger">Hoch → Wenig erneuerbare Energie verfügbar</span>

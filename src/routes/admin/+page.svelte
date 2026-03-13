@@ -12,6 +12,7 @@
     ['/admin/automations',      'bi-arrow-repeat',           'Automations',        'Sync run history'],
     ['/admin/daily',            'bi-calendar3',              'Daily History',       'Yield per day & month'],
     ['/admin/inverters',        'bi-lightning',              'Inverter Settings',  'API endpoints & colors'],
+    ['/admin/powerbank',        'bi-battery-charging',       'Stromspeicher',      'Powerbank pro Inverter'],
     ['/admin/smartmeter',       'bi-file-earmark-spreadsheet','Smart Meter',       'CSV import'],
     ['/admin/users',            'bi-person-gear',            'Users',              'Manage accounts'],
   ] as [href, icon, title, desc]}

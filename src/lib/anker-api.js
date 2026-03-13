@@ -204,11 +204,21 @@ function parseDeviceStatus(scene, deviceSn = null) {
   const solarbanks = scene?.solarbank_info?.solarbank_list ?? [];
   for (const sb of solarbanks) {
     if (deviceSn && sb.device_sn !== deviceSn) continue;
+    // Gesamt-PV-Eingang: Summe aller Panel-Strings (solar_power_1..4)
+    // Fallback: charging_power + output_power (was ins Netz geht + was in die Batterie geht)
+    const pvStrings = [sb.solar_power_1, sb.solar_power_2, sb.solar_power_3, sb.solar_power_4]
+      .map(v => num(v, 0)).reduce((a, b) => a + b, 0);
+    const charge_w    = num(sb.charging_power ?? sb.pv_to_battery_power ?? sb.charge_power_limit);
+    const discharge_w = num(sb.output_power   ?? sb.battery_to_output_power ?? sb.discharge_power);
+    const solar_power = pvStrings > 0
+      ? pvStrings
+      : num(sb.solar_power ?? sb.total_solar_power ?? sb.pv_power, null);
     return {
       device_sn:   sb.device_sn ?? null,
       soc:         num(sb.battery_power ?? sb.battery_soc),
-      charge_w:    num(sb.charging_power ?? sb.pv_to_battery_power ?? sb.charge_power_limit),
-      discharge_w: num(sb.output_power   ?? sb.battery_to_output_power ?? sb.discharge_power),
+      charge_w,
+      discharge_w,
+      solar_power, // Gesamt-PV-Leistung der ans Anker-Gerät angeschlossenen Panels (W)
       state:       chargingState(sb.charging_status),
     };
   }
@@ -222,6 +232,7 @@ function parseDeviceStatus(scene, deviceSn = null) {
       soc:         num(pps.battery_power ?? pps.soc),
       charge_w:    num(pps.input_power   ?? pps.charge_power),
       discharge_w: num(pps.output_power  ?? pps.discharge_power),
+      solar_power: num(pps.solar_power   ?? pps.pv_power, null),
       state:       chargingState(pps.charging_status),
     };
   }
@@ -235,6 +246,7 @@ function parseDeviceStatus(scene, deviceSn = null) {
       soc:         num(dev.battery_power ?? dev.soc),
       charge_w:    num(dev.charging_power ?? dev.input_power),
       discharge_w: num(dev.output_power),
+      solar_power: num(dev.solar_power ?? dev.pv_power, null),
       state:       chargingState(dev.charging_status),
     };
   }

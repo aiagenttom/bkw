@@ -119,5 +119,19 @@ export function GET() {
     savingsPowerbank[inv.name] = pb ? parseFloat(pbEur.toFixed(4)) : null;
   }
 
-  return json({ success: true, data: savings, savingsProfile, savingsPowerbank, hasProfile });
+  // Anker-Korrektur-Ertrag: Energie heute in Batterie → von OpenDTU nicht gemessen
+  const syncMin = parseInt(settings.sync_interval ?? '1');
+  const ankerChargeToday = {};
+  for (const inv of inverters) {
+    if (!powerbanks.has(inv.id)) { ankerChargeToday[inv.name] = null; continue; }
+    const row = db.prepare(`
+      SELECT ROUND(SUM(charge_w) * ? / 60.0, 1) AS charge_wh
+      FROM anker_readings
+      WHERE date(datetime(created_at, '+' || ? || ' hours')) = ?
+        AND charge_w IS NOT NULL AND charge_w > 0
+    `).get(syncMin, tzOffset, today);
+    ankerChargeToday[inv.name] = row?.charge_wh ?? null;
+  }
+
+  return json({ success: true, data: savings, savingsProfile, savingsPowerbank, hasProfile, ankerChargeToday });
 }

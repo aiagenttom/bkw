@@ -8,6 +8,7 @@
   let todaySavingsProfile   = data.todaySavingsProfile;
   let todaySavingsPowerbank = data.todaySavingsPowerbank;
   let hasProfile            = data.hasProfile;
+  let ankerChargeToday      = data.ankerChargeToday ?? {};
   let selInv    = 'all';
   let selDate   = today;
   let lastUpdate = '';
@@ -191,6 +192,7 @@
           todaySavingsProfile   = savJ.savingsProfile;
           todaySavingsPowerbank = savJ.savingsPowerbank;
           hasProfile            = savJ.hasProfile;
+          ankerChargeToday      = savJ.ankerChargeToday ?? {};
         }
       } else {
         const histR = await fetch(`/api/historical-live?date=${selDate}`);
@@ -325,9 +327,18 @@
             <div class="fw-bold">{fmt(d.temperature)}°C</div>
             <div class="text-muted small">Temp</div>
           </div>
+          {@const ankerCharge = ankerChargeToday[inv.name]}
           <div class="col text-center bkw-stat-box">
-            <div class="fw-bold">{fmt(d.yield_day, 2)}</div>
-            <div class="text-muted small">Wh today</div>
+            {#if ankerCharge != null && ankerCharge > 0}
+              <div class="fw-bold">{fmt((d.yield_day ?? 0) + ankerCharge, 0)}</div>
+              <div class="text-muted small">Wh today</div>
+              <div class="text-warning" style="font-size:.68rem">
+                DTU {fmt(d.yield_day, 0)} + ⚡{fmt(ankerCharge, 0)}
+              </div>
+            {:else}
+              <div class="fw-bold">{fmt(d.yield_day, 0)}</div>
+              <div class="text-muted small">Wh today</div>
+            {/if}
           </div>
         </div>
         <!-- Savings row -->

@@ -1,4 +1,4 @@
-import { fail, redirect } from '@sveltejs/kit';
+import { fail } from '@sveltejs/kit';
 import db from '$lib/db.js';
 import { syncInverter } from '$lib/sync.js';
 
@@ -15,7 +15,7 @@ export const actions = {
   saveSettings: async ({ request }) => {
     const d = await request.formData();
     const upd = db.prepare('UPDATE app_settings SET value = ? WHERE key = ?');
-    for (const key of ['api_base_url', 'sync_interval', 'auto_refresh_s', 'spotty_url', 'timezone', 'price_mode', 'fixed_price_ct', 'mwst_percent', 'netzgebuehr_ct']) {
+    for (const key of ['sync_interval', 'auto_refresh_s', 'spotty_url', 'timezone', 'price_mode', 'fixed_price_ct', 'mwst_percent', 'netzgebuehr_ct']) {
       const v = d.get(key);
       if (v !== null) upd.run(v.toString().trim(), key);
     }
@@ -23,19 +23,18 @@ export const actions = {
   },
 
   update: async ({ request }) => {
-    const d   = await request.formData();
-    const id  = parseInt(d.get('id'));
+    const d    = await request.formData();
+    const id   = parseInt(d.get('id'));
     const name = d.get('name')?.toString().trim();
     if (!name) return fail(400, { error: 'Name required' });
-    // price_mode: if "global" → store NULL (use global default)
-    const priceMode   = d.get('price_mode')?.toString() || 'global';
+    const priceMode    = d.get('price_mode')?.toString() || 'global';
     const fixedPriceCt = d.get('fixed_price_ct')?.toString().trim();
-    const kwpVal = d.get('kwp')?.toString().trim();
-    db.prepare('UPDATE inverters SET name=?, full_url=?, live_url=?, api_path=?, color=?, price_mode=?, fixed_price_ct=?, kwp=? WHERE id=?').run(
+    const kwpVal       = d.get('kwp')?.toString().trim();
+    const serial       = d.get('serial')?.toString().trim() || null;
+    db.prepare('UPDATE inverters SET name=?, full_url=?, serial=?, color=?, price_mode=?, fixed_price_ct=?, kwp=? WHERE id=?').run(
       name,
       d.get('full_url')?.toString().trim() || null,
-      d.get('live_url')?.toString().trim() || null,
-      d.get('api_path')?.toString().trim() || '',
+      serial,
       d.get('color')?.toString().trim() || '#3498db',
       priceMode === 'global' ? null : priceMode,
       fixedPriceCt ? parseFloat(fixedPriceCt) : null,
@@ -46,15 +45,15 @@ export const actions = {
   },
 
   add: async ({ request }) => {
-    const d = await request.formData();
-    const name = d.get('name')?.toString().trim();
+    const d      = await request.formData();
+    const name   = d.get('name')?.toString().trim();
     if (!name) return fail(400, { error: 'Name required' });
+    const serial = d.get('serial')?.toString().trim() || null;
     try {
-      db.prepare('INSERT INTO inverters (name, full_url, live_url, api_path, color, enabled) VALUES (?,?,?,?,?,1)').run(
+      db.prepare('INSERT INTO inverters (name, full_url, serial, color, enabled) VALUES (?,?,?,?,1)').run(
         name,
         d.get('full_url')?.toString().trim() || null,
-        d.get('live_url')?.toString().trim() || null,
-        d.get('api_path')?.toString().trim() || '',
+        serial,
         d.get('color')?.toString().trim() || '#3498db'
       );
     } catch (e) { return fail(400, { error: e.message }); }
@@ -62,7 +61,7 @@ export const actions = {
   },
 
   delete: async ({ request }) => {
-    const d  = await request.formData();
+    const d = await request.formData();
     db.prepare('DELETE FROM inverters WHERE id = ?').run(parseInt(d.get('id')));
     return { success: 'Inverter deleted' };
   },

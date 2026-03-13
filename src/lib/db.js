@@ -209,6 +209,8 @@ if (!invCols.includes('live_url'))
   db.exec('ALTER TABLE inverters ADD COLUMN live_url TEXT');
 if (!invCols.includes('kwp'))
   db.exec('ALTER TABLE inverters ADD COLUMN kwp REAL DEFAULT 0');
+if (!invCols.includes('serial'))
+  db.exec('ALTER TABLE inverters ADD COLUMN serial TEXT');
 
 const histCols = db.prepare('PRAGMA table_info(bkw_history)').all().map(c => c.name);
 if (!histCols.includes('dc_strings'))
@@ -219,6 +221,11 @@ if (!dailyCols.includes('savings_eur'))
   db.exec('ALTER TABLE bkw_daily ADD COLUMN savings_eur REAL');
 if (!dailyCols.includes('avg_price_ct'))
   db.exec('ALTER TABLE bkw_daily ADD COLUMN avg_price_ct REAL');
+
+// Anker-Readings: Gesamt-PV-Eingang der Solarbank nachträglich erfassen
+const ankerCols = db.prepare('PRAGMA table_info(anker_readings)').all().map(c => c.name);
+if (!ankerCols.includes('solar_power'))
+  db.exec('ALTER TABLE anker_readings ADD COLUMN solar_power REAL');
 
 // Seed
 if (!db.prepare('SELECT id FROM users WHERE username = ?').get('admin')) {

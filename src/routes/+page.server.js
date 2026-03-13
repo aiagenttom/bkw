@@ -141,5 +141,22 @@ export async function load() {
     todaySavingsPowerbank[inv.name] = pb ? parseFloat(pbEur.toFixed(4)) : null;
   }
 
-  return { inverters, summary, liveData, settings, today, todaySavings, todaySavingsProfile, todaySavingsPowerbank, hasProfile };
+  // Anker-Korrektur-Ertrag: Energie die heute in die Batterie geflossen ist,
+  // aber NICHT durch den Hoymiles-Wechselrichter (OpenDTU sieht sie nicht).
+  // Im Bypass-Modus ist charge_w ≈ 0 → keine Addition → korrekt.
+  const syncMin = parseInt(settings.sync_interval ?? '1');
+  const ankerChargeToday = {};
+  for (const inv of inverters) {
+    if (!powerbanks.has(inv.id)) { ankerChargeToday[inv.name] = null; continue; }
+    const row = db.prepare(`
+      SELECT ROUND(SUM(charge_w) * ? / 60.0, 1) AS charge_wh
+      FROM anker_readings
+      WHERE date(datetime(created_at, '+' || ? || ' hours')) = ?
+        AND charge_w IS NOT NULL AND charge_w > 0
+    `).get(syncMin, tzHours, today);
+    ankerChargeToday[inv.name] = row?.charge_wh ?? null;
+  }
+
+  return { inverters, summary, liveData, settings, today, todaySavings, todaySavingsProfile,
+           todaySavingsPowerbank, hasProfile, ankerChargeToday };
 }

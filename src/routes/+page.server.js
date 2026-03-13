@@ -1,5 +1,6 @@
 import db from '$lib/db.js';
 import { getTzOffset, getLocalToday } from '$lib/tz.js';
+import { simulatePowerbankSavings, loadPowerbanks } from '$lib/powerbank.js';
 
 export async function load() {
   const inverters = db.prepare('SELECT * FROM inverters WHERE enabled = 1 ORDER BY name').all();
@@ -88,15 +89,21 @@ export async function load() {
     for (const r of spotRows) hourlySpot[r.hour] = r.avg_price;
   }
 
-  const todaySavingsProfile = {};
+  const todaySavingsProfile   = {};
+  const todaySavingsPowerbank = {};
   const hasProfile = {};
+  const powerbanks = loadPowerbanks(db);
 
   for (const inv of inverters) {
     const profile = usageByInverter[inv.id];
     const hasP    = !!profile && profile.some(v => v > 0);
     hasProfile[inv.name] = hasP;
 
-    if (!hasP) { todaySavingsProfile[inv.name] = null; continue; }
+    if (!hasP) {
+      todaySavingsProfile[inv.name]   = null;
+      todaySavingsPowerbank[inv.name] = null;
+      continue;
+    }
 
     // Hourly yield: AVG(power_ac_v) per hour ≈ avg watts → 1h → Wh
     const hourlyYield = db.prepare(`
@@ -110,19 +117,29 @@ export async function load() {
     const mode    = inv.price_mode ?? globalMode;
     const fixedCt = inv.fixed_price_ct ?? globalFixed;
     let totalEur  = 0;
+    const hourlyData = [];
 
     for (const h of hourlyYield) {
-      const yieldWh        = h.avg_w;                           // W·h over 1h
-      const profileWh      = profile[h.hour] * 1000;           // kW → Wh
+      const yieldWh          = h.avg_w;
+      const profileWh        = profile[h.hour] * 1000;
       const eigenverbrauchWh = Math.min(yieldWh, profileWh);
-
-      const priceCt = mode === 'spotty' ? (hourlySpot[h.hour] ?? fixedCt) : fixedCt;
-      const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
+      const priceCt          = mode === 'spotty' ? (hourlySpot[h.hour] ?? fixedCt) : fixedCt;
+      const totalCtPerKwh    = (priceCt + netzCt) * (1 + mwstPct / 100);
       totalEur += eigenverbrauchWh / 1000 * totalCtPerKwh / 100;
+      hourlyData.push({ yieldWh, profileWh, priceCt });
     }
 
-    todaySavingsProfile[inv.name] = parseFloat(totalEur.toFixed(4));
+    // Powerbank-Zusatzersparnis separat erfassen
+    const pb = powerbanks.get(inv.id);
+    let pbEur = 0;
+    if (pb) {
+      pbEur     = simulatePowerbankSavings(hourlyData, pb.capacityWh, pb.dischargeW, netzCt, mwstPct);
+      totalEur += pbEur;
+    }
+
+    todaySavingsProfile[inv.name]   = parseFloat(totalEur.toFixed(4));
+    todaySavingsPowerbank[inv.name] = pb ? parseFloat(pbEur.toFixed(4)) : null;
   }
 
-  return { inverters, summary, liveData, settings, today, todaySavings, todaySavingsProfile, hasProfile };
+  return { inverters, summary, liveData, settings, today, todaySavings, todaySavingsProfile, todaySavingsPowerbank, hasProfile };
 }

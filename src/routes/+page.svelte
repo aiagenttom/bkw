@@ -3,10 +3,11 @@
   export let data;
 
   const { inverters, summary, settings, today } = data;
-  let liveData            = data.liveData;
-  let todaySavings        = data.todaySavings;
-  let todaySavingsProfile = data.todaySavingsProfile;
-  let hasProfile          = data.hasProfile;
+  let liveData              = data.liveData;
+  let todaySavings          = data.todaySavings;
+  let todaySavingsProfile   = data.todaySavingsProfile;
+  let todaySavingsPowerbank = data.todaySavingsPowerbank;
+  let hasProfile            = data.hasProfile;
   let selInv    = 'all';
   let selDate   = today;
   let lastUpdate = '';
@@ -186,18 +187,20 @@
         const savR = await fetch('/api/today-savings');
         const savJ = await savR.json();
         if (savJ.success) {
-          todaySavings        = savJ.data;
-          todaySavingsProfile = savJ.savingsProfile;
-          hasProfile          = savJ.hasProfile;
+          todaySavings          = savJ.data;
+          todaySavingsProfile   = savJ.savingsProfile;
+          todaySavingsPowerbank = savJ.savingsPowerbank;
+          hasProfile            = savJ.hasProfile;
         }
       } else {
         const histR = await fetch(`/api/historical-live?date=${selDate}`);
         const histJ = await histR.json();
         if (histJ.success) {
-          liveData            = histJ.data;
-          todaySavings        = histJ.savings;
-          todaySavingsProfile = histJ.savingsProfile;
-          hasProfile          = histJ.hasProfile;
+          liveData              = histJ.data;
+          todaySavings          = histJ.savings;
+          todaySavingsProfile   = histJ.savingsProfile;
+          todaySavingsPowerbank = histJ.savingsPowerbank;
+          hasProfile            = histJ.hasProfile;
         }
       }
 
@@ -348,6 +351,7 @@
           </div>
           {#if hasProfile?.[inv.name]}
           {@const profSav = todaySavingsProfile?.[inv.name]}
+          {@const pbSav   = todaySavingsPowerbank?.[inv.name]}
           <div class="d-flex justify-content-between align-items-center mt-1">
             <small class="text-muted">
               <i class="bi bi-bar-chart-steps me-1"></i>Ersparnis laut Profil
@@ -356,6 +360,16 @@
               {profSav != null ? '€\u202f' + profSav.toFixed(2) : '–'}
             </span>
           </div>
+          {#if pbSav != null && pbSav > 0}
+          <div class="d-flex justify-content-between align-items-center mt-1 ps-2">
+            <small class="text-muted" style="font-size:.75rem">
+              <i class="bi bi-battery-charging me-1 text-warning"></i>davon Powerbank
+            </small>
+            <span class="text-warning fw-semibold" style="font-size:.82rem">
+              + €\u202f{pbSav.toFixed(2)}
+            </span>
+          </div>
+          {/if}
           {/if}
         </div>
         {#if d.synced_at}

@@ -107,7 +107,8 @@ export function GET({ url }) {
     for (const r of spotRows) hourlySpot[r.hour] = r.avg_price;
   }
 
-  const savingsProfile = {};
+  const savingsProfile   = {};
+  const savingsPowerbank = {};
   const hasProfile = {};
   const powerbanks = loadPowerbanks(db);
 
@@ -116,7 +117,11 @@ export function GET({ url }) {
     const hasP    = !!profile && profile.some(v => v > 0);
     hasProfile[inv.name] = hasP;
 
-    if (!hasP) { savingsProfile[inv.name] = null; continue; }
+    if (!hasP) {
+      savingsProfile[inv.name]   = null;
+      savingsPowerbank[inv.name] = null;
+      continue;
+    }
 
     const hourlyYield = db.prepare(`
       SELECT CAST(strftime('%H', datetime(log_time, '+' || ? || ' hours')) AS INTEGER) AS hour,
@@ -139,12 +144,17 @@ export function GET({ url }) {
       hourlyData.push({ yieldWh: h.avg_w, profileWh: profile[h.hour] * 1000, priceCt });
     }
 
-    // Powerbank-Zusatzersparnis
+    // Powerbank-Zusatzersparnis separat tracken
     const pb = powerbanks.get(inv.id);
-    if (pb) totalEur += simulatePowerbankSavings(hourlyData, pb.capacityWh, pb.dischargeW, netzCt, mwstPct);
+    let pbEur = 0;
+    if (pb) {
+      pbEur     = simulatePowerbankSavings(hourlyData, pb.capacityWh, pb.dischargeW, netzCt, mwstPct);
+      totalEur += pbEur;
+    }
 
-    savingsProfile[inv.name] = parseFloat(totalEur.toFixed(4));
+    savingsProfile[inv.name]   = parseFloat(totalEur.toFixed(4));
+    savingsPowerbank[inv.name] = pb ? parseFloat(pbEur.toFixed(4)) : null;
   }
 
-  return json({ success: true, data, savings, savingsProfile, hasProfile });
+  return json({ success: true, data, savings, savingsProfile, savingsPowerbank, hasProfile });
 }

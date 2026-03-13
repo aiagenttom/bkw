@@ -304,6 +304,7 @@
   {@const sav = todaySavings[inv.name]}
   {@const effectiveMode = inv.price_mode || settings.price_mode || 'fixed'}
   {@const effectiveFixed = inv.fixed_price_ct ?? settings.fixed_price_ct ?? 30}
+  {@const ankerCharge = ankerChargeToday[inv.name] ?? null}
   <div class="col-sm-6 col-xl-4">
     <div class="card h-100 bkw-live-card shadow-sm">
       <div class="card-body">
@@ -327,7 +328,6 @@
             <div class="fw-bold">{fmt(d.temperature)}°C</div>
             <div class="text-muted small">Temp</div>
           </div>
-          {@const ankerCharge = ankerChargeToday[inv.name]}
           <div class="col text-center bkw-stat-box">
             {#if ankerCharge != null && ankerCharge > 0}
               <div class="fw-bold">{fmt((d.yield_day ?? 0) + ankerCharge, 0)}</div>

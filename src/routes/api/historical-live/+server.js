@@ -82,5 +82,61 @@ export function GET({ url }) {
     savings[inv.name]   = parseFloat((yieldWh / 1000 * totalCtPerKwh / 100).toFixed(4));
   }
 
-  return json({ success: true, data, savings });
+  // ── Profile-based savings for the selected date ────────────────────────
+  const jsDay  = new Date(date + 'T12:00:00').getDay();
+  const weekday = jsDay === 0 ? 6 : jsDay - 1;
+
+  const usageRows = db.prepare('SELECT inverter_id, hour, kw FROM usage_profiles WHERE weekday = ?').all(weekday);
+  const usageByInverter = {};
+  for (const r of usageRows) {
+    if (!usageByInverter[r.inverter_id]) usageByInverter[r.inverter_id] = new Array(24).fill(0);
+    usageByInverter[r.inverter_id][r.hour] = r.kw;
+  }
+
+  const needsSpotty = inverters.some(inv => (inv.price_mode ?? globalMode) === 'spotty');
+  const hourlySpot = {};
+  if (needsSpotty) {
+    const spotRows = db.prepare(`
+      SELECT CAST(strftime('%H', datetime(ts, '+' || ? || ' hours')) AS INTEGER) AS hour,
+             AVG(price) AS avg_price
+      FROM spotty_prices
+      WHERE date(datetime(ts, '+' || ? || ' hours')) = ?
+      GROUP BY hour
+    `).all(tzHours, tzHours, date);
+    for (const r of spotRows) hourlySpot[r.hour] = r.avg_price;
+  }
+
+  const savingsProfile = {};
+  const hasProfile = {};
+
+  for (const inv of inverters) {
+    const profile = usageByInverter[inv.id];
+    const hasP    = !!profile && profile.some(v => v > 0);
+    hasProfile[inv.name] = hasP;
+
+    if (!hasP) { savingsProfile[inv.name] = null; continue; }
+
+    const hourlyYield = db.prepare(`
+      SELECT CAST(strftime('%H', datetime(log_time, '+' || ? || ' hours')) AS INTEGER) AS hour,
+             AVG(power_ac_v) AS avg_w
+      FROM bkw_history
+      WHERE date(datetime(log_time, '+' || ? || ' hours')) = ? AND name = ?
+      GROUP BY hour
+    `).all(tzHours, tzHours, date, inv.name);
+
+    const mode    = inv.price_mode ?? globalMode;
+    const fixedCt = inv.fixed_price_ct ?? globalFixed;
+    let totalEur  = 0;
+
+    for (const h of hourlyYield) {
+      const eigenverbrauchWh = Math.min(h.avg_w, profile[h.hour] * 1000);
+      const priceCt = mode === 'spotty' ? (hourlySpot[h.hour] ?? fixedCt) : fixedCt;
+      const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
+      totalEur += eigenverbrauchWh / 1000 * totalCtPerKwh / 100;
+    }
+
+    savingsProfile[inv.name] = parseFloat(totalEur.toFixed(4));
+  }
+
+  return json({ success: true, data, savings, savingsProfile, hasProfile });
 }

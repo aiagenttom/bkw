@@ -194,8 +194,10 @@
         const histR = await fetch(`/api/historical-live?date=${selDate}`);
         const histJ = await histR.json();
         if (histJ.success) {
-          liveData     = histJ.data;
-          todaySavings = histJ.savings;
+          liveData            = histJ.data;
+          todaySavings        = histJ.savings;
+          todaySavingsProfile = histJ.savingsProfile;
+          hasProfile          = histJ.hasProfile;
         }
       }
 

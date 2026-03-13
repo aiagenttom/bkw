@@ -183,6 +183,20 @@ db.exec(`
   );
 `);
 
+// Fehlende Indizes nachträglich anlegen (Performance-Fix)
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_automation_msg_log_id  ON automation_msg_log(log_id);
+  CREATE INDEX IF NOT EXISTS idx_automation_log_started ON automation_log(started_at DESC);
+`);
+
+// Automation-Logs auf 500 Einträge begrenzen (verhindert unbegrenztes Wachstum)
+db.exec(`
+  DELETE FROM automation_msg_log
+  WHERE log_id NOT IN (SELECT id FROM automation_log ORDER BY started_at DESC LIMIT 500);
+  DELETE FROM automation_log
+  WHERE id NOT IN (SELECT id FROM automation_log ORDER BY started_at DESC LIMIT 500);
+`);
+
 // Migrations
 const invCols = db.prepare('PRAGMA table_info(inverters)').all().map(c => c.name);
 if (!invCols.includes('full_url'))

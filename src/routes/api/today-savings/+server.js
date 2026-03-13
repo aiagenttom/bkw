@@ -104,14 +104,27 @@ export function GET() {
       const priceCt = mode === 'spotty' ? (hourlySpot[h.hour] ?? fixedCt) : fixedCt;
       const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
       totalEur += eigenverbrauchWh / 1000 * totalCtPerKwh / 100;
-      hourlyData.push({ yieldWh: h.avg_w, profileWh: profile[h.hour] * 1000, priceCt });
+      hourlyData.push({ hour: h.hour, yieldWh: h.avg_w, profileWh: profile[h.hour] * 1000, priceCt });
     }
 
-    // Powerbank-Zusatzersparnis separat tracken
+    // Powerbank-Zusatzersparnis – mit realem Morgen-SOC aus Anker-Readings
     const pb = powerbanks.get(inv.id);
     let pbEur = 0;
     if (pb) {
-      pbEur     = simulatePowerbankSavings(hourlyData, pb.capacityWh, pb.dischargeW, netzCt, mwstPct);
+      const morningRow = db.prepare(`
+        SELECT soc FROM anker_readings
+        WHERE date(datetime(created_at, '+' || ? || ' hours')) = ?
+        ORDER BY created_at ASC LIMIT 1
+      `).get(tzOffset, today);
+      const fallbackRow = !morningRow ? db.prepare(`
+        SELECT soc FROM anker_readings
+        WHERE date(datetime(created_at, '+' || ? || ' hours')) < ?
+        ORDER BY created_at DESC LIMIT 1
+      `).get(tzOffset, today) : null;
+      const socPct       = (morningRow ?? fallbackRow)?.soc ?? 0;
+      const initialSocWh = (socPct / 100) * pb.capacityWh;
+
+      pbEur     = simulatePowerbankSavings(hourlyData, pb.capacityWh, pb.dischargeW, netzCt, mwstPct, initialSocWh, pb.dischargeStart, pb.dischargeEnd);
       totalEur += pbEur;
     }
 

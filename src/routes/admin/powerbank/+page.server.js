@@ -38,11 +38,13 @@ export const actions = {
 
   // ── Powerbank-Simulation (pro Inverter) ──────────────────────────────────
   save: async ({ request }) => {
-    const d           = await request.formData();
-    const inverterId  = parseInt(d.get('inverter_id'));
-    const capacityKwh = parseFloat(d.get('capacity_kwh'));
-    const dischargeW  = parseFloat(d.get('discharge_w'));
-    const enabled     = d.get('enabled') === '1' ? 1 : 0;
+    const d              = await request.formData();
+    const inverterId     = parseInt(d.get('inverter_id'));
+    const capacityKwh    = parseFloat(d.get('capacity_kwh'));
+    const dischargeW     = parseFloat(d.get('discharge_w'));
+    const enabled        = d.get('enabled') === '1' ? 1 : 0;
+    const dischargeStart = (d.get('discharge_start') || '00:00').trim();
+    const dischargeEnd   = (d.get('discharge_end')   || '23:59').trim();
 
     if (!inverterId || isNaN(capacityKwh) || isNaN(dischargeW))
       return fail(400, { error: 'Ungültige Eingabe' });
@@ -50,13 +52,15 @@ export const actions = {
       return fail(400, { error: 'Kapazität und Abgabeleistung müssen > 0 sein' });
 
     db.prepare(`
-      INSERT INTO powerbanks (inverter_id, capacity_wh, discharge_w, enabled)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO powerbanks (inverter_id, capacity_wh, discharge_w, enabled, discharge_start, discharge_end)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(inverter_id) DO UPDATE SET
-        capacity_wh = excluded.capacity_wh,
-        discharge_w = excluded.discharge_w,
-        enabled     = excluded.enabled
-    `).run(inverterId, Math.round(capacityKwh * 1000), dischargeW, enabled);
+        capacity_wh     = excluded.capacity_wh,
+        discharge_w     = excluded.discharge_w,
+        enabled         = excluded.enabled,
+        discharge_start = excluded.discharge_start,
+        discharge_end   = excluded.discharge_end
+    `).run(inverterId, Math.round(capacityKwh * 1000), dischargeW, enabled, dischargeStart, dischargeEnd);
 
     return { success: 'Gespeichert' };
   },

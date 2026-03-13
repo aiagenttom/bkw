@@ -227,6 +227,13 @@ const ankerCols = db.prepare('PRAGMA table_info(anker_readings)').all().map(c =>
 if (!ankerCols.includes('solar_power'))
   db.exec('ALTER TABLE anker_readings ADD COLUMN solar_power REAL');
 
+// Powerbanks: Entlade-Zeitfenster (z.B. nur 05:00–22:30 entladen)
+const pbCols = db.prepare('PRAGMA table_info(powerbanks)').all().map(c => c.name);
+if (!pbCols.includes('discharge_start'))
+  db.exec("ALTER TABLE powerbanks ADD COLUMN discharge_start TEXT NOT NULL DEFAULT '00:00'");
+if (!pbCols.includes('discharge_end'))
+  db.exec("ALTER TABLE powerbanks ADD COLUMN discharge_end TEXT NOT NULL DEFAULT '23:59'");
+
 // Seed
 if (!db.prepare('SELECT id FROM users WHERE username = ?').get('admin')) {
   db.prepare('INSERT INTO users (username, password, email, is_admin) VALUES (?,?,?,1)')

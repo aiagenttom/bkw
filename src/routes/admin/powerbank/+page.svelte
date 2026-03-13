@@ -89,6 +89,22 @@
         </div>
 
         <div class="col-6 col-md-2">
+          <label class="form-label form-label-sm fw-semibold" for="dstart-{inv.id}">Entladen ab</label>
+          <input id="dstart-{inv.id}" name="discharge_start" type="time"
+                 class="form-control form-control-sm"
+                 value={pb?.discharge_start ?? '00:00'} />
+          <div class="text-muted" style="font-size:.7rem">Beginn Entlade-Fenster</div>
+        </div>
+
+        <div class="col-6 col-md-2">
+          <label class="form-label form-label-sm fw-semibold" for="dend-{inv.id}">Entladen bis</label>
+          <input id="dend-{inv.id}" name="discharge_end" type="time"
+                 class="form-control form-control-sm"
+                 value={pb?.discharge_end ?? '23:59'} />
+          <div class="text-muted" style="font-size:.7rem">Ende Entlade-Fenster</div>
+        </div>
+
+        <div class="col-6 col-md-2">
           <label class="form-label form-label-sm fw-semibold">Status</label>
           <select name="enabled" class="form-select form-select-sm">
             <option value="1" selected={!pb || pb.enabled === 1}>Aktiv</option>
@@ -118,6 +134,9 @@
         <i class="bi bi-sun me-1 text-warning"></i>PV-Überschuss → Speicher ({(pb.capacity_wh/1000).toFixed(1)} kWh)
         → <i class="bi bi-house me-1"></i>Haushalt ({pb.discharge_w} W konstant)
         | Max. Laufzeit: {(pb.capacity_wh / pb.discharge_w).toFixed(1)} h
+        {#if pb.discharge_start !== '00:00' || pb.discharge_end !== '23:59'}
+          | <i class="bi bi-clock me-1"></i>Entladen nur {pb.discharge_start}–{pb.discharge_end}
+        {/if}
       </small>
     </div>
     {/if}

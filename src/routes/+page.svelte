@@ -329,16 +329,8 @@
             <div class="text-muted small">Temp</div>
           </div>
           <div class="col text-center bkw-stat-box">
-            {#if ankerCharge != null && ankerCharge > 0}
-              <div class="fw-bold">{fmt((d.yield_day ?? 0) + ankerCharge, 0)}</div>
-              <div class="text-muted small">Wh today</div>
-              <div class="text-warning" style="font-size:.68rem">
-                DTU {fmt(d.yield_day, 0)} + ⚡{fmt(ankerCharge, 0)}
-              </div>
-            {:else}
-              <div class="fw-bold">{fmt(d.yield_day, 0)}</div>
-              <div class="text-muted small">Wh today</div>
-            {/if}
+            <div class="fw-bold">{fmt(d.yield_day, 0)}</div>
+            <div class="text-muted small">Wh today</div>
           </div>
         </div>
         <!-- Savings row -->

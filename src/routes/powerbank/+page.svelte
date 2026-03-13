@@ -268,11 +268,11 @@
   <i class="bi bi-exclamation-triangle fs-5"></i>
   <div>
     <strong>Keine Daten verfügbar.</strong>
-    {#if !serviceOnline}
-      Der Python-Microservice ist offline.
-      Bitte unter <a href="/admin/powerbank" class="alert-link">Einstellungen</a> einrichten und starten.
+    {#if !ankerEnabled}
+      Anker-Anbindung nicht konfiguriert.
+      Bitte unter <a href="/admin/powerbank" class="alert-link">Einstellungen</a> E-Mail und Passwort eintragen.
     {:else}
-      Der Dienst läuft, aber es liegen noch keine Messwerte vor.
+      Konfiguriert, aber noch keine Messwerte abgerufen. Seite lädt in Kürze.
     {/if}
   </div>
 </div>
@@ -300,5 +300,5 @@
 <div class="alert alert-info py-2 small">
   <i class="bi bi-info-circle me-1"></i>
   Diese Seite aktualisiert sich automatisch alle <strong>30 Sekunden</strong>.
-  Daten kommen vom Anker SOLIX Python-Microservice und werden in der Datenbank gespeichert.
+  Daten kommen direkt von der Anker SOLIX Cloud-API (Node.js nativ) und werden in der Datenbank gespeichert.
 </div>

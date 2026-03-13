@@ -164,7 +164,8 @@ export class AnkerApi {
     if (sites.length === 0) throw new Error('Anker: keine Sites gefunden');
 
     // 2. Scene-Info der ersten Site abrufen
-    const scene = await this._post('power_service/v1/site/get_scene_info', {
+    // Achtung: offizielle API hat Tippfehler "get_scen_info" (fehlendes 'e')
+    const scene = await this._post('power_service/v1/site/get_scen_info', {
       site_id: sites[0].site_id,
     });
 
@@ -176,7 +177,7 @@ export class AnkerApi {
     const siteData = await this._post('power_service/v1/site/get_site_list');
     const sites    = siteData?.site_list ?? [];
     if (sites.length === 0) return { sites: [] };
-    const scene = await this._post('power_service/v1/site/get_scene_info', {
+    const scene = await this._post('power_service/v1/site/get_scen_info', {
       site_id: sites[0].site_id,
     });
     return { sites, scene };

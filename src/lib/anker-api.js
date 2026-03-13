@@ -141,19 +141,6 @@ export class AnkerApi {
     };
   }
 
-  async _get(path) {
-    await this.ensureLogin();
-    const resp = await fetch(`${this.baseUrl}/${path}`, {
-      method:  'GET',
-      headers: this._authHeaders(),
-      signal:  AbortSignal.timeout(12_000),
-    });
-    if (!resp.ok) throw new Error(`Anker GET ${path}: HTTP ${resp.status}`);
-    const j = await resp.json();
-    if (j.code !== 0) throw new Error(`Anker GET ${path}: code ${j.code} ${j.msg ?? ''}`);
-    return j.data;
-  }
-
   async _post(path, body = {}) {
     await this.ensureLogin();
     const resp = await fetch(`${this.baseUrl}/${path}`, {
@@ -171,8 +158,8 @@ export class AnkerApi {
   // ── Gerätestatus abrufen ───────────────────────────────────────────────────
 
   async getDeviceStatus(deviceSn = null) {
-    // 1. Site-Liste abrufen
-    const siteData = await this._get('power_service/v1/site/get_site_list');
+    // 1. Site-Liste abrufen (API erwartet POST)
+    const siteData = await this._post('power_service/v1/site/get_site_list');
     const sites    = siteData?.site_list ?? [];
     if (sites.length === 0) throw new Error('Anker: keine Sites gefunden');
 
@@ -186,7 +173,7 @@ export class AnkerApi {
 
   /** Gibt die rohen scene_info-Daten zurück – nützlich zur Fehlersuche */
   async dumpSceneInfo() {
-    const siteData = await this._get('power_service/v1/site/get_site_list');
+    const siteData = await this._post('power_service/v1/site/get_site_list');
     const sites    = siteData?.site_list ?? [];
     if (sites.length === 0) return { sites: [] };
     const scene = await this._post('power_service/v1/site/get_scene_info', {

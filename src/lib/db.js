@@ -233,7 +233,6 @@ for (const [k, v, l] of [
   ['fixed_price_ct', '30',                           'Fixed tariff (ct/kWh)'],
   ['mwst_percent',   '20',                           'MwSt (%)'],
   ['netzgebuehr_ct', '0',                            'Netzgebühr (ct/kWh)'],
-  ['anker_service_url', 'http://localhost:7331',     'Anker Solix Microservice URL'],
 ]) db.prepare('INSERT OR IGNORE INTO app_settings (key, value, label) VALUES (?,?,?)').run(k, v, l);
 
 // Demo history

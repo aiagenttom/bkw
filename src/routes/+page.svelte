@@ -316,13 +316,9 @@
             {d.reachable == null ? 'Archiv' : (d.reachable ? 'Online' : 'Offline')}
           </span>
         </div>
-        <div class="row row-cols-2 g-1">
+        <div class="row row-cols-3 g-1">
           <div class="col text-center bkw-stat-box">
-            <div class="fs-5 fw-bold text-warning">{fmt(d.power_ac, 0)}</div>
-            <div class="text-muted small">W AC</div>
-          </div>
-          <div class="col text-center bkw-stat-box">
-            <div class="fs-5 fw-bold text-info">{fmt(d.power_dc, 0)}</div>
+            <div class="fs-5 fw-bold text-warning">{fmt(d.power_dc, 0)}</div>
             <div class="text-muted small">W DC</div>
           </div>
           <div class="col text-center bkw-stat-box">

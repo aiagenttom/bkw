@@ -32,5 +32,23 @@ export async function load() {
     ORDER BY created_at ASC
   `).all();
 
-  return { latest, history, ankerEnabled };
+  // Lifetime-Statistiken aus app_settings
+  function getSetting(key) {
+    return db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key)?.value ?? null;
+  }
+  const lifetimeKwh = getSetting('anker_lifetime_kwh');
+  const lifetimeCo2 = getSetting('anker_lifetime_co2');
+  const lifetimeEur = getSetting('anker_lifetime_eur');
+  const retainLoadW = getSetting('anker_retain_load_w');
+
+  const ankerLifetime = (lifetimeKwh != null || lifetimeCo2 != null || lifetimeEur != null)
+    ? {
+        kwh:           lifetimeKwh != null ? parseFloat(lifetimeKwh) : null,
+        co2:           lifetimeCo2 != null ? parseFloat(lifetimeCo2) : null,
+        eur:           lifetimeEur != null ? parseFloat(lifetimeEur) : null,
+        retain_load_w: retainLoadW != null ? parseFloat(retainLoadW) : null,
+      }
+    : null;
+
+  return { latest, history, ankerEnabled, ankerLifetime };
 }

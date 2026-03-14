@@ -7,6 +7,7 @@
   let latest        = data.latest;
   let history       = data.history;
   let ankerEnabled  = data.ankerEnabled;
+  let ankerLifetime = data.ankerLifetime ?? null;
   let serviceOnline = false; // wird beim ersten Refresh gesetzt
 
   let chart = null;
@@ -162,10 +163,11 @@
       if (resp.ok) {
         const j = await resp.json();
         if (j.success) {
-          latest       = j.latest;
-          history      = j.history;
-          serviceOnline  = j.serviceOnline;
+          latest        = j.latest;
+          history       = j.history;
+          serviceOnline = j.serviceOnline;
           if (j.serviceOnline) ankerEnabled = true;
+          if (j.ankerLifetime) ankerLifetime = j.ankerLifetime;
           lastUpdated   = new Date();
 
           // Update chart
@@ -309,6 +311,40 @@
     {:else}
       Konfiguriert, aber noch keine Messwerte abgerufen. Seite lädt in Kürze.
     {/if}
+  </div>
+</div>
+{/if}
+
+<!-- ── Lifetime-Statistiken ──────────────────────────────────────────────── -->
+{#if ankerLifetime}
+<div class="card shadow-sm mb-4">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-trophy me-2 text-warning"></i>Lifetime-Statistiken
+    {#if ankerLifetime.retain_load_w != null}
+      <span class="ms-2 badge bg-secondary fw-normal">Ausgabe konfiguriert: {ankerLifetime.retain_load_w} W</span>
+    {/if}
+  </div>
+  <div class="card-body">
+    <div class="row g-3 text-center">
+      {#if ankerLifetime.kwh != null}
+      <div class="col-12 col-sm-4">
+        <div class="fs-3 fw-bold text-success">{ankerLifetime.kwh.toLocaleString('de-AT', {maximumFractionDigits: 1})}<span class="fs-6 fw-normal ms-1">kWh</span></div>
+        <div class="text-muted small"><i class="bi bi-sun me-1"></i>Erzeugte Energie</div>
+      </div>
+      {/if}
+      {#if ankerLifetime.co2 != null}
+      <div class="col-12 col-sm-4">
+        <div class="fs-3 fw-bold text-info">{ankerLifetime.co2.toLocaleString('de-AT', {maximumFractionDigits: 1})}<span class="fs-6 fw-normal ms-1">kg</span></div>
+        <div class="text-muted small"><i class="bi bi-cloud me-1"></i>CO₂ eingespart</div>
+      </div>
+      {/if}
+      {#if ankerLifetime.eur != null}
+      <div class="col-12 col-sm-4">
+        <div class="fs-3 fw-bold text-warning">{ankerLifetime.eur.toLocaleString('de-AT', {minimumFractionDigits: 2, maximumFractionDigits: 2})}<span class="fs-6 fw-normal ms-1">€</span></div>
+        <div class="text-muted small"><i class="bi bi-piggy-bank me-1"></i>Geldersparnis</div>
+      </div>
+      {/if}
+    </div>
   </div>
 </div>
 {/if}

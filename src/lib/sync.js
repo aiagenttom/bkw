@@ -423,7 +423,22 @@ export async function syncAnker() {
     `).run(status.device_sn, status.soc, status.charge_w, status.discharge_w,
            status.solar_power ?? null, status.state);
 
-    console.log(`[anker] SOC ${status.soc}% ↑${status.charge_w}W ↓${status.discharge_w}W`);
+    // ── Lifetime-Statistiken in app_settings persistieren ──────────────────
+    // Werden von der Anker-Cloud geliefert und sind kumulativ (wachsen über Zeit).
+    const settingsUpsert = db.prepare(
+      `INSERT OR REPLACE INTO app_settings (key, value, label) VALUES (?, ?, ?)`
+    );
+    if (status.lifetime_kwh != null)
+      settingsUpsert.run('anker_lifetime_kwh', String(status.lifetime_kwh), 'Anker Lifetime Energie (kWh)');
+    if (status.lifetime_co2 != null)
+      settingsUpsert.run('anker_lifetime_co2', String(status.lifetime_co2), 'Anker Lifetime CO₂-Einsparung (kg)');
+    if (status.lifetime_eur != null)
+      settingsUpsert.run('anker_lifetime_eur', String(status.lifetime_eur), 'Anker Lifetime Geldersparnis (€)');
+    if (status.retain_load_w != null)
+      settingsUpsert.run('anker_retain_load_w', String(status.retain_load_w), 'Anker konfigurierte Ausgabeleistung (W)');
+
+    console.log(`[anker] SOC ${status.soc}% ↑${status.charge_w}W ↓${status.discharge_w}W` +
+      (status.lifetime_kwh != null ? ` | Lifetime ${status.lifetime_kwh} kWh` : ''));
     return status;
   } catch (e) {
     console.warn(`[anker] sync failed: ${e.message}`);

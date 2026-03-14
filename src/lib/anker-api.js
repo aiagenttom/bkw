@@ -200,6 +200,19 @@ function chargingState(cs) {
 }
 
 function parseDeviceStatus(scene, deviceSn = null) {
+  // ── Lifetime-Statistiken (Scene-Ebene, unabhängig vom Gerät) ─────────────
+  // statistics[type=1] = erzeugte Energie (kWh), [2] = CO₂-Einsparung (kg), [3] = Ersparnis (€)
+  const stats       = scene?.statistics ?? [];
+  const lifetime_kwh = num(stats.find(s => s.type === '1')?.total, null);
+  const lifetime_co2 = num(stats.find(s => s.type === '2')?.total, null);
+  const lifetime_eur = num(stats.find(s => s.type === '3')?.total, null);
+
+  // Hilfsfunktion: "210W" oder 210 → Zahl in W
+  function parseWatt(v) {
+    if (v == null) return null;
+    return num(String(v).replace(/[^0-9.]/g, ''), null);
+  }
+
   // ── Solarbank (SOLIX Solarbank 1 / 2) ────────────────────────────────────
   const solarbanks = scene?.solarbank_info?.solarbank_list ?? [];
   for (const sb of solarbanks) {
@@ -213,6 +226,8 @@ function parseDeviceStatus(scene, deviceSn = null) {
     const solar_power = pvStrings > 0
       ? pvStrings
       : num(sb.solar_power ?? sb.total_solar_power ?? sb.pv_power, null);
+    // retain_load: konfigurierte Ausgabeleistung ans Haus (z.B. "210W")
+    const retain_load_w = parseWatt(sb.retain_load ?? sb.output_power_limit ?? null);
     return {
       device_sn:   sb.device_sn ?? null,
       soc:         num(sb.battery_power ?? sb.battery_soc),
@@ -220,6 +235,10 @@ function parseDeviceStatus(scene, deviceSn = null) {
       discharge_w,
       solar_power, // Gesamt-PV-Leistung der ans Anker-Gerät angeschlossenen Panels (W)
       state:       chargingState(sb.charging_status),
+      retain_load_w,  // Konfigurierte Abgabeleistung ans Haus (W)
+      lifetime_kwh,   // Lifetime erzeugte Energie (kWh)
+      lifetime_co2,   // Lifetime CO₂-Einsparung (kg)
+      lifetime_eur,   // Lifetime Geldersparnis (€)
     };
   }
 
@@ -234,6 +253,10 @@ function parseDeviceStatus(scene, deviceSn = null) {
       discharge_w: num(pps.output_power  ?? pps.discharge_power),
       solar_power: num(pps.solar_power   ?? pps.pv_power, null),
       state:       chargingState(pps.charging_status),
+      retain_load_w:  null,
+      lifetime_kwh,
+      lifetime_co2,
+      lifetime_eur,
     };
   }
 
@@ -248,6 +271,10 @@ function parseDeviceStatus(scene, deviceSn = null) {
       discharge_w: num(dev.output_power),
       solar_power: num(dev.solar_power ?? dev.pv_power, null),
       state:       chargingState(dev.charging_status),
+      retain_load_w:  null,
+      lifetime_kwh,
+      lifetime_co2,
+      lifetime_eur,
     };
   }
 

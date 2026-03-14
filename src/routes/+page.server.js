@@ -156,23 +156,30 @@ export async function load() {
     todaySavingsPowerbank[inv.name] = pb ? parseFloat(pbEur.toFixed(4)) : null;
   }
 
-  // Anker-Korrektur-Ertrag: Energie die heute in die Batterie geflossen ist,
-  // aber NICHT durch den Hoymiles-Wechselrichter (OpenDTU sieht sie nicht).
-  // Im Bypass-Modus ist charge_w ≈ 0 → keine Addition → korrekt.
+  // Anker-Messwerte für heute:
+  //   charge_wh:    Energie heute von Panels IN die Batterie (Hoymiles sieht sie NICHT)
+  //   discharge_wh: Energie heute von der Batterie ANS HAUS (= tatsächliche Leistung der Powerbank)
   // Anker-Cron läuft alle 5 Minuten → syncMin = 5 (unabhängig von sync_interval)
   const syncMin = 5;
-  const ankerChargeToday = {};
+  const ankerChargeToday    = {};
+  const ankerDischargeToday = {};
   for (const inv of inverters) {
-    if (!powerbanks.has(inv.id)) { ankerChargeToday[inv.name] = null; continue; }
+    if (!powerbanks.has(inv.id)) {
+      ankerChargeToday[inv.name]    = null;
+      ankerDischargeToday[inv.name] = null;
+      continue;
+    }
     const row = db.prepare(`
-      SELECT ROUND(SUM(charge_w) * ? / 60.0, 1) AS charge_wh
+      SELECT
+        ROUND(SUM(CASE WHEN charge_w    > 0 THEN charge_w    ELSE 0 END) * ? / 60.0, 1) AS charge_wh,
+        ROUND(SUM(CASE WHEN discharge_w > 0 THEN discharge_w ELSE 0 END) * ? / 60.0, 1) AS discharge_wh
       FROM anker_readings
       WHERE date(datetime(created_at, '+' || ? || ' hours')) = ?
-        AND charge_w IS NOT NULL AND charge_w > 0
-    `).get(syncMin, tzHours, today);
-    ankerChargeToday[inv.name] = row?.charge_wh ?? null;
+    `).get(syncMin, syncMin, tzHours, today);
+    ankerChargeToday[inv.name]    = row?.charge_wh    ?? null;
+    ankerDischargeToday[inv.name] = row?.discharge_wh ?? null;
   }
 
   return { inverters, summary, liveData, settings, today, todaySavings, todaySavingsProfile,
-           todaySavingsPowerbank, hasProfile, ankerChargeToday };
+           todaySavingsPowerbank, hasProfile, ankerChargeToday, ankerDischargeToday };
 }

@@ -8,7 +8,8 @@
   let todaySavingsProfile   = data.todaySavingsProfile;
   let todaySavingsPowerbank = data.todaySavingsPowerbank;
   let hasProfile            = data.hasProfile;
-  let ankerChargeToday      = data.ankerChargeToday ?? {};
+  let ankerChargeToday      = data.ankerChargeToday    ?? {};
+  let ankerDischargeToday   = data.ankerDischargeToday ?? {};
   let selInv    = 'all';
   let selDate   = today;
   let lastUpdate = '';
@@ -199,7 +200,8 @@
           todaySavingsProfile   = savJ.savingsProfile;
           todaySavingsPowerbank = savJ.savingsPowerbank;
           hasProfile            = savJ.hasProfile;
-          ankerChargeToday      = savJ.ankerChargeToday ?? {};
+          ankerChargeToday      = savJ.ankerChargeToday    ?? {};
+          ankerDischargeToday   = savJ.ankerDischargeToday ?? {};
         }
       } else {
         const histR = await fetch(`/api/historical-live?date=${selDate}`);
@@ -311,7 +313,8 @@
   {@const sav = todaySavings[inv.name]}
   {@const effectiveMode = inv.price_mode || settings.price_mode || 'fixed'}
   {@const effectiveFixed = inv.fixed_price_ct ?? settings.fixed_price_ct ?? 30}
-  {@const ankerCharge = ankerChargeToday[inv.name] ?? null}
+  {@const ankerCharge    = ankerChargeToday[inv.name]    ?? null}
+  {@const ankerDischarge = ankerDischargeToday[inv.name] ?? null}
   <div class="col-sm-6 col-xl-4">
     <div class="card h-100 bkw-live-card shadow-sm">
       <div class="card-body">
@@ -336,10 +339,13 @@
             <div class="text-muted small">Temp</div>
           </div>
           <div class="col text-center bkw-stat-box">
-            <div class="fw-bold">{fmt((d.yield_day ?? 0) + (ankerCharge ?? 0), 0)}</div>
+            <div class="fw-bold">{fmt((d.yield_day ?? 0) + (ankerDischarge ?? 0), 0)}</div>
             <div class="text-muted small">Wh today</div>
-            {#if ankerCharge}
-              <div style="font-size:.62rem; color:#aaa" title="Hoymiles + Anker Batterie-Ladung">{fmt(d.yield_day, 0)} + {fmt(ankerCharge, 0)}</div>
+            {#if ankerDischarge}
+              <div style="font-size:.62rem; color:#aaa"
+                   title="Hoymiles Ertrag + Anker Entladung ans Haus">
+                {fmt(d.yield_day, 0)} + {fmt(ankerDischarge, 0)}⚡
+              </div>
             {/if}
           </div>
         </div>

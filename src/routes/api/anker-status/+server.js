@@ -62,9 +62,8 @@ export async function GET({ url }) {
   // ── Heutiger Anker-Korrektur-Ertrag ────────────────────────────────────────
   // = Energie die in die Batterie geflossen ist (charge_w), NICHT durch Hoymiles gemessen.
   // Im Bypass-Modus ist charge_w ≈ 0 → Hoymiles sieht alles → korrekt keine Addition.
-  // Formel: SUM(charge_w) × anker_sync_interval_min / 60 = Wh
-  // Anker läuft alle 5 Minuten → syncMin = 5
-  const syncMin = 5;
+  // Formel: SUM(charge_w) × sync_interval_min / 60 = Wh
+  const syncMin = parseInt(db.prepare("SELECT value FROM app_settings WHERE key = 'sync_interval'").get()?.value ?? '1');
   const tzH = parseInt(
     db.prepare("SELECT value FROM app_settings WHERE key = 'tz_offset_h'").get()?.value ?? '1'
   );

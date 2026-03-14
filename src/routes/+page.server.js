@@ -159,8 +159,7 @@ export async function load() {
   // Anker-Messwerte für heute:
   //   charge_wh:    Energie heute von Panels IN die Batterie (Hoymiles sieht sie NICHT)
   //   discharge_wh: Energie heute von der Batterie ANS HAUS (= tatsächliche Leistung der Powerbank)
-  // Anker-Cron läuft alle 5 Minuten → syncMin = 5 (unabhängig von sync_interval)
-  const syncMin = 5;
+  const syncMin = parseInt(db.prepare("SELECT value FROM app_settings WHERE key = 'sync_interval'").get()?.value ?? '1');
   const ankerChargeToday    = {};
   const ankerDischargeToday = {};
   for (const inv of inverters) {

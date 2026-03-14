@@ -14,7 +14,10 @@ function scheduleCron() {
   const expr = `*/${Math.max(1, minutes)} * * * *`;
   if (expr === cronExpr) return;
   cronJob?.stop();
-  cronJob = cron.schedule(expr, () => syncAll().catch(console.error));
+  cronJob = cron.schedule(expr, () => {
+    syncAll().catch(console.error);
+    syncAnker().catch(e => console.error('[anker] sync error:', e.message));
+  });
   cronExpr = expr;
   console.log(`[cron] sync scheduled: ${expr}`);
 }
@@ -44,13 +47,8 @@ cron.schedule('15 * * * *', () => {
 syncWeather().catch(e => console.error('[weather] initial fetch error:', e.message));
 console.log('[cron] weather sync scheduled: 15 * * * *');
 
-// ── Anker SOLIX sync every 5 minutes ─────────────────────────────────────────
-cron.schedule('*/5 * * * *', () => {
-  syncAnker().catch(e => console.error('[anker] sync error:', e.message));
-});
 // Fetch Anker data once on startup
 syncAnker().catch(e => console.error('[anker] initial sync error:', e.message));
-console.log('[cron] anker sync scheduled: */5 * * * *');
 
 // Prune sessions every 30 minutes
 let pruneTimer = null;

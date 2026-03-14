@@ -135,7 +135,7 @@ export function GET() {
   // Anker-Messwerte für heute:
   //   charge_wh:    Energie heute von Panels IN die Batterie (Hoymiles sieht sie NICHT)
   //   discharge_wh: Energie heute von der Batterie ANS HAUS (tatsächliche Powerbank-Leistung)
-  const syncMin = 5;
+  const syncMin = parseInt(db.prepare("SELECT value FROM app_settings WHERE key = 'sync_interval'").get()?.value ?? '1');
   const ankerChargeToday    = {};
   const ankerDischargeToday = {};
   for (const inv of inverters) {

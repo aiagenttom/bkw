@@ -48,19 +48,28 @@
   let ChartClass = null;
 
   /**
-   * Baut Zeitstempel-Labels für die X-Achse.
-   * Bei Tageswechsel innerhalb der 24h-Daten wird das Datum vorangestellt,
-   * damit die Achse nicht verwirrend "18:22 → 17:18" zeigt.
+   * Baut Zeitstempel-Labels für die X-Achse: immer "DD. HH:MM".
+   * Tooltip zeigt volles "DD.MM.YYYY HH:MM".
    */
   function makeLabels(rows) {
-    let prevDate = null;
     return rows.map(r => {
-      const d       = new Date(r.ts);
-      const dateStr = d.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit' });
-      const timeStr = d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
-      const label   = (dateStr !== prevDate) ? `${dateStr} ${timeStr}` : timeStr;
-      prevDate = dateStr;
-      return label;
+      const d = new Date(r.ts);
+      const day  = String(d.getDate()).padStart(2, '0');
+      const hour = String(d.getHours()).padStart(2, '0');
+      const min  = String(d.getMinutes()).padStart(2, '0');
+      return `${day}. ${hour}:${min}`;
+    });
+  }
+
+  function makeTooltipLabels(rows) {
+    return rows.map(r => {
+      const d   = new Date(r.ts);
+      const day = String(d.getDate()).padStart(2, '0');
+      const mon = String(d.getMonth() + 1).padStart(2, '0');
+      const yr  = d.getFullYear();
+      const hr  = String(d.getHours()).padStart(2, '0');
+      const mn  = String(d.getMinutes()).padStart(2, '0');
+      return `${day}.${mon}.${yr} ${hr}:${mn}`;
     });
   }
 
@@ -68,7 +77,8 @@
     if (!canvas || !browser || !ChartClass) return;
     if (chart) { chart.destroy(); chart = null; }
 
-    const labels = makeLabels(history);
+    const labels        = makeLabels(history);
+    const tooltipLabels = makeTooltipLabels(history);
 
     chart = new ChartClass(canvas, {
       type: 'line',
@@ -112,6 +122,7 @@
           legend: { position: 'top' },
           tooltip: {
             callbacks: {
+              title: items => tooltipLabels[items[0]?.dataIndex] ?? '',
               label: ctx => {
                 const v = ctx.raw;
                 if (v == null) return '';
@@ -159,11 +170,14 @@
 
           // Update chart
           if (chart) {
-            const labels = makeLabels(history);
+            const labels        = makeLabels(history);
+            const tooltipLabels = makeTooltipLabels(history);
             chart.data.labels = labels;
             chart.data.datasets[0].data = history.map(r => r.soc);
             chart.data.datasets[1].data = history.map(r => r.charge_w);
             chart.data.datasets[2].data = history.map(r => r.discharge_w);
+            // Update tooltip title callback mit neuen Timestamps
+            chart.options.plugins.tooltip.callbacks.title = items => tooltipLabels[items[0]?.dataIndex] ?? '';
             chart.update('none');
           }
         }

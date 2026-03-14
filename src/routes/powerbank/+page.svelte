@@ -47,14 +47,28 @@
   // ── Chart ──────────────────────────────────────────────────────────────────
   let ChartClass = null;
 
+  /**
+   * Baut Zeitstempel-Labels für die X-Achse.
+   * Bei Tageswechsel innerhalb der 24h-Daten wird das Datum vorangestellt,
+   * damit die Achse nicht verwirrend "18:22 → 17:18" zeigt.
+   */
+  function makeLabels(rows) {
+    let prevDate = null;
+    return rows.map(r => {
+      const d       = new Date(r.ts);
+      const dateStr = d.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit' });
+      const timeStr = d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+      const label   = (dateStr !== prevDate) ? `${dateStr} ${timeStr}` : timeStr;
+      prevDate = dateStr;
+      return label;
+    });
+  }
+
   function buildChart() {
     if (!canvas || !browser || !ChartClass) return;
     if (chart) { chart.destroy(); chart = null; }
 
-    const labels = history.map(r => {
-      const d = new Date(r.ts);
-      return d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
-    });
+    const labels = makeLabels(history);
 
     chart = new ChartClass(canvas, {
       type: 'line',
@@ -145,10 +159,7 @@
 
           // Update chart
           if (chart) {
-            const labels = history.map(r => {
-              const d = new Date(r.ts);
-              return d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
-            });
+            const labels = makeLabels(history);
             chart.data.labels = labels;
             chart.data.datasets[0].data = history.map(r => r.soc);
             chart.data.datasets[1].data = history.map(r => r.charge_w);

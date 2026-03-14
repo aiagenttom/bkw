@@ -1,5 +1,9 @@
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import db from './db.js';
 import { getTzOffset, getLocalToday, getTimezone } from './tz.js';
+import { getAnkerApi } from './anker-api.js';
 
 function getSetting(key) {
   return db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key)?.value ?? null;
@@ -393,4 +397,85 @@ export async function syncWeather() {
   })();
 
   console.log(`[weather] synced ${hourlyCount} hourly slots (7-day forecast)`);
+}
+
+/**
+ * Fetch Anker SOLIX live data and persist to anker_readings.
+ * Called by the background cron every 5 minutes – not from the browser.
+ */
+export async function syncAnker() {
+  const configPath = join(homedir(), '.bkw-data', 'anker-service.json');
+  let config;
+  try {
+    if (!existsSync(configPath)) return null;
+    config = JSON.parse(readFileSync(configPath, 'utf8'));
+  } catch { return null; }
+
+  if (!config?.enabled || !config.email || !config.password) return null;
+
+  try {
+    const api    = getAnkerApi(config.email, config.password, config.country || 'de');
+    const status = await api.getDeviceStatus(config.device_sn || null);
+
+    db.prepare(`
+      INSERT INTO anker_readings (device_sn, soc, charge_w, discharge_w, solar_power, state)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(status.device_sn, status.soc, status.charge_w, status.discharge_w,
+           status.solar_power ?? null, status.state);
+
+    console.log(`[anker] SOC ${status.soc}% ↑${status.charge_w}W ↓${status.discharge_w}W`);
+    return status;
+  } catch (e) {
+    console.warn(`[anker] sync failed: ${e.message}`);
+    return null;
+  }
+}
+
+/**
+ * Verdichtet Anker-Rohdaten und löscht altes Material.
+ *
+ * Strategie:
+ *   • anker_readings (5-min-Rohdaten):  max. 2 Jahre → vorher zu anker_daily verdichten
+ *   • anker_daily   (Tages-Aggregate):  dauerhaft erhalten
+ *   • bkw_history   (minütliche Daten): max. 2 Jahre → bkw_daily bleibt als Kompakt-Form
+ *   • bkw_daily     (Tages-Aggregate):  dauerhaft erhalten
+ *
+ * Wird nächtlich um 23:55 aufgerufen.
+ */
+export function pruneOldData() {
+  const tzH = parseInt(getSetting('tz_offset_h') ?? '1');
+
+  // ── Schritt 1: Anker-Rohdaten verdichten (INSERT OR REPLACE in anker_daily) ──
+  // Aggregiert alle Tage die älter als 2 Jahre sind und noch nicht in anker_daily stehen.
+  // INSERT OR REPLACE überschreibt bestehende Tages-Einträge sicher.
+  db.prepare(`
+    INSERT OR REPLACE INTO anker_daily
+      (date, avg_soc, min_soc, max_soc, charge_wh, discharge_wh, readings)
+    SELECT
+      date(datetime(created_at, '+' || ? || ' hours'))           AS date,
+      ROUND(AVG(COALESCE(soc, 0)), 1)                            AS avg_soc,
+      ROUND(MIN(COALESCE(soc, 0)), 1)                            AS min_soc,
+      ROUND(MAX(COALESCE(soc, 0)), 1)                            AS max_soc,
+      ROUND(SUM(COALESCE(charge_w,    0)) * 5 / 60.0, 1)        AS charge_wh,
+      ROUND(SUM(COALESCE(discharge_w, 0)) * 5 / 60.0, 1)        AS discharge_wh,
+      COUNT(*)                                                    AS readings
+    FROM anker_readings
+    WHERE created_at < datetime('now', '-2 years')
+    GROUP BY date
+  `).run(tzH);
+
+  // ── Schritt 2: Veraltete Rohdaten löschen ──────────────────────────────────
+  const { changes: ankerChanges } = db.prepare(
+    `DELETE FROM anker_readings WHERE created_at < datetime('now', '-2 years')`
+  ).run();
+
+  // bkw_history: bkw_daily ist die Kompakt-Form und bleibt dauerhaft erhalten
+  const { changes: histChanges } = db.prepare(
+    `DELETE FROM bkw_history WHERE log_time < datetime('now', '-2 years')`
+  ).run();
+
+  // ── Logging ────────────────────────────────────────────────────────────────
+  if (ankerChanges > 0) console.log(`[prune] anker_readings: ${ankerChanges} Rohdaten verdichtet → anker_daily`);
+  if (histChanges  > 0) console.log(`[prune] bkw_history:    ${histChanges} Minuten-Daten gelöscht (bkw_daily bleibt)`);
+  if (!ankerChanges && !histChanges) console.log('[prune] nichts zu bereinigen (Daten < 2 Jahre)');
 }

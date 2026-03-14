@@ -159,7 +159,8 @@ export async function load() {
   // Anker-Korrektur-Ertrag: Energie die heute in die Batterie geflossen ist,
   // aber NICHT durch den Hoymiles-Wechselrichter (OpenDTU sieht sie nicht).
   // Im Bypass-Modus ist charge_w ≈ 0 → keine Addition → korrekt.
-  const syncMin = parseInt(settings.sync_interval ?? '1');
+  // Anker-Cron läuft alle 5 Minuten → syncMin = 5 (unabhängig von sync_interval)
+  const syncMin = 5;
   const ankerChargeToday = {};
   for (const inv of inverters) {
     if (!powerbanks.has(inv.id)) { ankerChargeToday[inv.name] = null; continue; }

@@ -133,7 +133,8 @@ export function GET() {
   }
 
   // Anker-Korrektur-Ertrag: Energie heute in Batterie → von OpenDTU nicht gemessen
-  const syncMin = parseInt(settings.sync_interval ?? '1');
+  // Anker-Cron läuft alle 5 Minuten → syncMin = 5 (unabhängig von sync_interval)
+  const syncMin = 5;
   const ankerChargeToday = {};
   for (const inv of inverters) {
     if (!powerbanks.has(inv.id)) { ankerChargeToday[inv.name] = null; continue; }

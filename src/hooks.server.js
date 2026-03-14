@@ -1,6 +1,6 @@
 import { getSession, pruneSessions } from '$lib/session.js';
 import db from '$lib/db.js';
-import { syncAll, syncDaily, syncSpottyPrices, syncWeather } from '$lib/sync.js';
+import { syncAll, syncDaily, syncSpottyPrices, syncWeather, syncAnker, pruneOldData } from '$lib/sync.js';
 import cron from 'node-cron';
 
 // ── Cron scheduler (starts once at module load) ───────────────────────────────
@@ -21,11 +21,12 @@ function scheduleCron() {
 
 scheduleCron();
 
-// ── Daily snapshot at 23:55 ───────────────────────────────────────────────────
+// ── Daily snapshot + data pruning at 23:55 ───────────────────────────────────
 cron.schedule('55 23 * * *', () => {
   try { syncDaily(); } catch (e) { console.error('[daily] snapshot failed:', e.message); }
+  try { pruneOldData(); } catch (e) { console.error('[prune] failed:', e.message); }
 });
-console.log('[cron] daily snapshot scheduled: 55 23 * * *');
+console.log('[cron] daily snapshot + prune scheduled: 55 23 * * *');
 
 // ── Spotty price sync: every hour at :05 ─────────────────────────────────────
 cron.schedule('5 * * * *', () => {
@@ -42,6 +43,14 @@ cron.schedule('15 * * * *', () => {
 // Fetch weather once on startup
 syncWeather().catch(e => console.error('[weather] initial fetch error:', e.message));
 console.log('[cron] weather sync scheduled: 15 * * * *');
+
+// ── Anker SOLIX sync every 5 minutes ─────────────────────────────────────────
+cron.schedule('*/5 * * * *', () => {
+  syncAnker().catch(e => console.error('[anker] sync error:', e.message));
+});
+// Fetch Anker data once on startup
+syncAnker().catch(e => console.error('[anker] initial sync error:', e.message));
+console.log('[cron] anker sync scheduled: */5 * * * *');
 
 // Prune sessions every 30 minutes
 let pruneTimer = null;

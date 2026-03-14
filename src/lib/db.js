@@ -147,7 +147,7 @@ db.exec(`
   );
 `);
 
-// Anker SOLIX Powerbank live readings
+// Anker SOLIX Powerbank live readings (raw, 5-min resolution)
 db.exec(`
   CREATE TABLE IF NOT EXISTS anker_readings (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -159,6 +159,19 @@ db.exec(`
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_anker_readings_time ON anker_readings(created_at);
+`);
+
+// Tägliche Verdichtung der Anker-Rohdaten (bleibt dauerhaft erhalten, auch nach Prune)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS anker_daily (
+    date         TEXT PRIMARY KEY,  -- YYYY-MM-DD (Lokalzeit)
+    avg_soc      REAL,              -- Mittlerer Ladestand in %
+    min_soc      REAL,              -- Minimum SOC
+    max_soc      REAL,              -- Maximum SOC
+    charge_wh    REAL,              -- Gesamt-Ladeenergie des Tages in Wh
+    discharge_wh REAL,              -- Gesamt-Entladeenergie des Tages in Wh
+    readings     INTEGER            -- Anzahl der Messungen
+  );
 `);
 
 // Weather storage tables

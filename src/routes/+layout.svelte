@@ -15,29 +15,29 @@
       <ul class="navbar-nav me-auto">
         <li class="nav-item">
           <a class="nav-link" class:active={path === '/'} href="/">
-            <i class="bi bi-speedometer2 me-1"></i>Dashboard
+            <i class="bi bi-speedometer2"></i><span class="d-none d-sm-inline ms-1">Dashboard</span>
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link" class:active={path.startsWith('/history')} href="/history">
-            <i class="bi bi-bar-chart-fill me-1"></i>Verlauf
+            <i class="bi bi-bar-chart-fill"></i><span class="d-none d-sm-inline ms-1">Verlauf</span>
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link" class:active={path.startsWith('/prognose')} href="/prognose">
-            <i class="bi bi-cloud-sun me-1"></i>Prognose
+            <i class="bi bi-cloud-sun"></i><span class="d-none d-sm-inline ms-1">Prognose</span>
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link" class:active={path.startsWith('/powerbank')} href="/powerbank">
-            <i class="bi bi-battery-charging me-1"></i>Powerbank
+            <i class="bi bi-battery-charging"></i><span class="d-none d-sm-inline ms-1">Powerbank</span>
           </a>
         </li>
         {#if isAdmin}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" class:active={path.startsWith('/admin')}
              href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="bi bi-gear-fill me-1"></i>Admin
+            <i class="bi bi-gear-fill"></i><span class="d-none d-sm-inline ms-1">Admin</span>
           </a>
           <ul class="dropdown-menu dropdown-menu-dark">
             <li><a class="dropdown-item" href="/admin"><i class="bi bi-house me-2"></i>Overview</a></li>
@@ -63,12 +63,12 @@
         {#if user}
           <li class="nav-item me-2">
             <span class="navbar-text text-light">
-              <i class="bi bi-person-circle me-1"></i>{user.username}
+              <i class="bi bi-person-circle"></i><span class="d-none d-sm-inline ms-1">{user.username}</span>
             </span>
           </li>
           <li class="nav-item">
             <a class="btn btn-outline-light btn-sm" href="/logout">
-              <i class="bi bi-box-arrow-right me-1"></i>Logout
+              <i class="bi bi-box-arrow-right"></i><span class="d-none d-sm-inline ms-1">Logout</span>
             </a>
           </li>
         {:else}

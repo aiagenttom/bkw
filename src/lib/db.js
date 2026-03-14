@@ -147,6 +147,23 @@ db.exec(`
   );
 `);
 
+// Shelly Pro 3EM – Stromverbrauchsmessung (live readings, 1-min resolution)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS shelly_readings (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    total_act_power  REAL,   -- Gesamtverbrauch in W (Summe aller 3 Phasen)
+    a_act_power      REAL,   -- Phase L1 in W
+    b_act_power      REAL,   -- Phase L2 in W
+    c_act_power      REAL,   -- Phase L3 in W
+    a_voltage        REAL,   -- Phase L1 Spannung in V
+    b_voltage        REAL,   -- Phase L2 Spannung in V
+    c_voltage        REAL,   -- Phase L3 Spannung in V
+    total_energy_wh  REAL    -- Kumulierter Gesamtverbrauch in Wh (von EMData)
+  );
+  CREATE INDEX IF NOT EXISTS idx_shelly_readings_time ON shelly_readings(created_at);
+`);
+
 // Anker SOLIX Powerbank live readings (raw, 5-min resolution)
 db.exec(`
   CREATE TABLE IF NOT EXISTS anker_readings (
@@ -274,6 +291,7 @@ for (const [k, v, l] of [
   ['fixed_price_ct', '30',                           'Fixed tariff (ct/kWh)'],
   ['mwst_percent',   '20',                           'MwSt (%)'],
   ['netzgebuehr_ct', '0',                            'Netzgebühr (ct/kWh)'],
+  ['shelly_url',     '',                             'Shelly Pro 3EM URL (z.B. http://192.168.1.50)'],
 ]) db.prepare('INSERT OR IGNORE INTO app_settings (key, value, label) VALUES (?,?,?)').run(k, v, l);
 
 // Demo history

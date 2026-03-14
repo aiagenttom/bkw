@@ -1,6 +1,6 @@
 import { getSession, pruneSessions } from '$lib/session.js';
 import db from '$lib/db.js';
-import { syncAll, syncDaily, syncSpottyPrices, syncWeather, syncAnker, pruneOldData } from '$lib/sync.js';
+import { syncAll, syncDaily, syncSpottyPrices, syncWeather, syncAnker, syncShelly, pruneOldData } from '$lib/sync.js';
 import cron from 'node-cron';
 
 // ── Cron scheduler (starts once at module load) ───────────────────────────────
@@ -17,6 +17,7 @@ function scheduleCron() {
   cronJob = cron.schedule(expr, () => {
     syncAll().catch(console.error);
     syncAnker().catch(e => console.error('[anker] sync error:', e.message));
+    syncShelly().catch(e => console.error('[shelly] sync error:', e.message));
   });
   cronExpr = expr;
   console.log(`[cron] sync scheduled: ${expr}`);
@@ -47,8 +48,9 @@ cron.schedule('15 * * * *', () => {
 syncWeather().catch(e => console.error('[weather] initial fetch error:', e.message));
 console.log('[cron] weather sync scheduled: 15 * * * *');
 
-// Fetch Anker data once on startup
+// Fetch Anker + Shelly once on startup
 syncAnker().catch(e => console.error('[anker] initial sync error:', e.message));
+syncShelly().catch(e => console.error('[shelly] initial sync error:', e.message));
 
 // Prune sessions every 30 minutes
 let pruneTimer = null;

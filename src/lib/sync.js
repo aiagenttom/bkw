@@ -447,6 +447,61 @@ export async function syncAnker() {
 }
 
 /**
+ * Fetch Shelly Pro 3EM live data and persist to shelly_readings.
+ * Uses Shelly Gen2 RPC API:
+ *   GET /rpc/EM.GetStatus?id=0    → live power per phase
+ *   GET /rpc/EMData.GetStatus?id=0 → cumulative energy (Wh)
+ */
+export async function syncShelly() {
+  const url = getSetting('shelly_url');
+  if (!url?.trim()) return;
+
+  const base = url.trim().replace(/\/$/, '');
+  let emStatus = null, emData = null;
+
+  try {
+    const [r1, r2] = await Promise.allSettled([
+      fetch(`${base}/rpc/EM.GetStatus?id=0`,    { signal: AbortSignal.timeout(5000) }),
+      fetch(`${base}/rpc/EMData.GetStatus?id=0`, { signal: AbortSignal.timeout(5000) }),
+    ]);
+    if (r1.status === 'fulfilled' && r1.value.ok) emStatus = await r1.value.json();
+    if (r2.status === 'fulfilled' && r2.value.ok) emData   = await r2.value.json();
+  } catch (e) {
+    console.warn(`[shelly] fetch failed: ${e.message}`);
+    return;
+  }
+
+  if (!emStatus) { console.warn('[shelly] no EM status returned'); return; }
+
+  const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+  db.prepare(`
+    INSERT INTO shelly_readings
+      (created_at, total_act_power, a_act_power, b_act_power, c_act_power,
+       a_voltage, b_voltage, c_voltage, total_energy_wh)
+    VALUES (?,?,?,?,?,?,?,?,?)
+  `).run(
+    now,
+    emStatus.total_act_power ?? null,
+    emStatus.a_act_power     ?? null,
+    emStatus.b_act_power     ?? null,
+    emStatus.c_act_power     ?? null,
+    emStatus.a_voltage       ?? null,
+    emStatus.b_voltage       ?? null,
+    emStatus.c_voltage       ?? null,
+    emData?.total_act        ?? null,
+  );
+
+  // Keep last 1440 readings (24h × 1min)
+  db.prepare(
+    `DELETE FROM shelly_readings WHERE id NOT IN
+     (SELECT id FROM shelly_readings ORDER BY created_at DESC LIMIT 1440)`
+  ).run();
+
+  console.log(`[shelly] ${emStatus.total_act_power ?? '?'} W (L1:${emStatus.a_act_power ?? '?'} L2:${emStatus.b_act_power ?? '?'} L3:${emStatus.c_act_power ?? '?'})`);
+}
+
+/**
  * Verdichtet Anker-Rohdaten und löscht altes Material.
  *
  * Strategie:

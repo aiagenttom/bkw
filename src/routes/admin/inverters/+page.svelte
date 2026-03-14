@@ -115,6 +115,20 @@
         </div>
       </div>
 
+      <hr class="my-3" />
+
+      <!-- Shelly Pro 3EM -->
+      <div class="fw-semibold small mb-2"><i class="bi bi-plug me-1"></i>Shelly Pro 3EM (Stromverbrauch)</div>
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small" for="shelly-url">Shelly URL</label>
+          <input id="shelly-url" name="shelly_url" class="form-control form-control-sm"
+                 placeholder="http://192.168.1.50"
+                 value={settings.shelly_url || ''} />
+          <small class="text-muted">IP-Adresse des Shelly Pro 3EM im lokalen Netzwerk</small>
+        </div>
+      </div>
+
       <button class="btn btn-primary btn-sm mt-3">
         <i class="bi bi-save me-1"></i>Save Settings
       </button>

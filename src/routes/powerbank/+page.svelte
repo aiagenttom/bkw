@@ -45,10 +45,10 @@
   }
 
   // ── Chart ──────────────────────────────────────────────────────────────────
+  let ChartClass = null;
+
   function buildChart() {
-    if (!canvas || !browser) return;
-    const Chart = window.Chart;
-    if (!Chart) return;
+    if (!canvas || !browser || !ChartClass) return;
     if (chart) { chart.destroy(); chart = null; }
 
     const labels = history.map(r => {
@@ -56,7 +56,7 @@
       return d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
     });
 
-    chart = new Chart(canvas, {
+    chart = new ChartClass(canvas, {
       type: 'line',
       data: {
         labels,
@@ -161,10 +161,20 @@
     loading = false;
   }
 
-  onMount(() => {
+  onMount(async () => {
+    const { Chart, registerables } = await import('chart.js');
+    Chart.register(...registerables);
+    ChartClass = Chart;
     buildChart();
     lastUpdated = new Date();
     interval = setInterval(refresh, 30_000);
+
+    // Re-fetch immediately when tab becomes visible (browser throttles background timers)
+    function onVisible() {
+      if (document.visibilityState === 'visible') refresh();
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   });
   onDestroy(() => {
     clearInterval(interval);

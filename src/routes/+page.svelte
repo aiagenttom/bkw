@@ -62,6 +62,13 @@
     await fetchData();
     const secs = parseInt(settings.auto_refresh_s || 30);
     if (secs > 0) timer = setInterval(fetchData, secs * 1000);
+
+    // Re-fetch immediately when tab becomes visible (browser throttles background timers)
+    function onVisible() {
+      if (document.visibilityState === 'visible') fetchData();
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   });
 
   onDestroy(() => { clearInterval(timer); Object.values(charts).forEach(c => c?.destroy()); });

@@ -336,8 +336,11 @@
             <div class="text-muted small">Temp</div>
           </div>
           <div class="col text-center bkw-stat-box">
-            <div class="fw-bold">{fmt(d.yield_day, 0)}</div>
+            <div class="fw-bold">{fmt((d.yield_day ?? 0) + (ankerCharge ?? 0), 0)}</div>
             <div class="text-muted small">Wh today</div>
+            {#if ankerCharge}
+              <div style="font-size:.62rem; color:#aaa" title="Hoymiles + Anker Batterie-Ladung">{fmt(d.yield_day, 0)} + {fmt(ankerCharge, 0)}</div>
+            {/if}
           </div>
         </div>
         <!-- Savings row -->
@@ -372,7 +375,7 @@
               <i class="bi bi-battery-charging me-1 text-warning"></i>davon Powerbank
             </small>
             <span class="text-warning fw-semibold" style="font-size:.82rem">
-              + €\u202f{pbSav.toFixed(2)}
+              {'+ €\u202f' + pbSav.toFixed(2)}
             </span>
           </div>
           {/if}

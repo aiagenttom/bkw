@@ -75,7 +75,8 @@ export async function load({ url }) {
     .sort((a, b) => a.month.localeCompare(b.month) || a.inverter.localeCompare(b.inverter));
 
   // ── Profile-based savings ──────────────────────────────────────────────────
-  const invIdByName = Object.fromEntries(inverters.map(i => [i.name, i.id]));
+  const invIdByName    = Object.fromEntries(inverters.map(i => [i.name, i.id]));
+  const powerbanks     = loadPowerbanks(db);
 
   const profileRows = db.prepare('SELECT inverter_id, weekday, hour, kw FROM usage_profiles').all();
   const profiles = {};
@@ -86,7 +87,6 @@ export async function load({ url }) {
   }
 
   const hasSavingsProfile = profileRows.some(r => r.kw > 0);
-  const powerbanks = loadPowerbanks(db);
 
   if (hasSavingsProfile && dateSet.length > 0) {
     // Group dates by tz offset (typically 2 groups: CET=1, CEST=2)
@@ -187,6 +187,65 @@ export async function load({ url }) {
         }
       }
       m.total_savings_profile = parseFloat(total.toFixed(2));
+    }
+  }
+
+  // ── Anker discharge Wh pro Tag für Inverter mit Powerbank ──────────────────
+  // Genau wie am Dashboard: yield_wh = Hoymiles + Anker-Entladung ans Haus
+  if (dateSet.length > 0) {
+    const syncMin = parseInt(settings.sync_interval ?? '1');
+
+    // Daten nach Tz-Offset gruppieren (CET=1, CEST=2)
+    const datesByTz = {};
+    for (const date of dateSet) {
+      const tz = getTzOffset(date);
+      (datesByTz[tz] ??= []).push(date);
+    }
+
+    for (const [tz, dates] of Object.entries(datesByTz)) {
+      const tzInt = parseInt(tz);
+      const placeholders = dates.map(() => '?').join(',');
+
+      // Aktuelle Rohdaten aus anker_readings (Integration: W × min/60 = Wh)
+      const ankerRows = db.prepare(`
+        SELECT
+          date(datetime(created_at, '+' || ? || ' hours')) AS day,
+          ROUND(SUM(CASE WHEN discharge_w > 0 THEN discharge_w ELSE 0 END) * ? / 60.0, 1) AS discharge_wh
+        FROM anker_readings
+        WHERE date(datetime(created_at, '+' || ? || ' hours')) IN (${placeholders})
+        GROUP BY day
+      `).all(tzInt, syncMin, tzInt, ...dates);
+
+      // Ältere verdichtete Daten aus anker_daily (Fallback für >2 Jahre)
+      const ankerDailyRows = db.prepare(
+        `SELECT date AS day, discharge_wh FROM anker_daily WHERE date IN (${placeholders})`
+      ).all(...dates);
+
+      // anker_readings überschreibt anker_daily bei Überschneidung
+      const ankerByDay = {};
+      for (const r of ankerDailyRows) ankerByDay[r.day] = r.discharge_wh;
+      for (const r of ankerRows) if (r.discharge_wh > 0) ankerByDay[r.day] = r.discharge_wh;
+
+      // Auf Inverter mit Powerbank addieren
+      for (const invName of Object.keys(byInverter)) {
+        const invId = invIdByName[invName];
+        if (!powerbanks.has(invId)) continue;
+
+        for (const [day, dischargeWh] of Object.entries(ankerByDay)) {
+          if (!dischargeWh || dischargeWh <= 0) continue;
+
+          if (byInverter[invName]?.[day]) {
+            byInverter[invName][day].yield_wh = (byInverter[invName][day].yield_wh ?? 0) + dischargeWh;
+          }
+          if (byDate[day]) {
+            byDate[day].yield_wh = (byDate[day].yield_wh ?? 0) + dischargeWh;
+          }
+          // Monatstotale aktualisieren
+          const month = day.substring(0, 7);
+          const monthEntry = monthly.find(m => m.month === month && m.inverter === invName);
+          if (monthEntry) monthEntry.total_wh = Math.round((monthEntry.total_wh ?? 0) + dischargeWh);
+        }
+      }
     }
   }
 

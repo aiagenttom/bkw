@@ -4,16 +4,12 @@
 
   export let data;
 
-  let latest             = data.latest;
-  let history            = data.history;
-  let consumptionToday   = data.consumptionToday;
-  let shellyEnabled      = data.shellyEnabled;
-  let serviceOnline      = latest
-    ? (Date.now() - new Date(latest.ts).getTime()) < 5 * 60 * 1000
-    : false;
+  let shellInverters = data.shellInverters;
+  let byInverter     = data.byInverter;
 
-  let chart       = null;
-  let canvas;
+  let ChartClass  = null;
+  let charts      = {};   // inverter name → Chart instance
+  let canvases    = {};   // inverter name → canvas element
   let interval;
   let lastUpdated = null;
   let loading     = false;
@@ -26,6 +22,11 @@
     if (diff < 60)   return `vor ${diff}s`;
     if (diff < 3600) return `vor ${Math.floor(diff / 60)}min`;
     return `vor ${Math.floor(diff / 3600)}h`;
+  }
+
+  function isOnline(ts) {
+    if (!ts) return false;
+    return (Date.now() - new Date(ts).getTime()) < 5 * 60 * 1000;
   }
 
   function makeLabels(rows) {
@@ -41,17 +42,17 @@
     });
   }
 
-  let ChartClass = null;
-
-  function buildChart() {
+  function buildChart(invName) {
+    const canvas  = canvases[invName];
+    const history = byInverter[invName]?.history ?? [];
     if (!canvas || !browser || !ChartClass || !history.length) return;
-    if (chart) { chart.destroy(); chart = null; }
+    if (charts[invName]) { charts[invName].destroy(); delete charts[invName]; }
 
     const labels        = makeLabels(history);
     const tooltipLabels = makeTooltipLabels(history);
     const ptR           = history.length > 120 ? 0 : 2;
 
-    chart = new ChartClass(canvas, {
+    charts[invName] = new ChartClass(canvas, {
       type: 'line',
       data: {
         labels,
@@ -61,32 +62,25 @@
             data: history.map(r => r.total_act_power),
             borderColor: '#e74c3c',
             backgroundColor: 'rgba(231,76,60,0.1)',
-            fill: true, tension: 0.3, pointRadius: ptR,
-            borderWidth: 2,
+            fill: true, tension: 0.3, pointRadius: ptR, borderWidth: 2,
           },
           {
             label: 'L1 (W)',
             data: history.map(r => r.a_act_power),
-            borderColor: '#3498db',
-            backgroundColor: 'transparent',
-            tension: 0.3, pointRadius: 0, borderWidth: 1.5,
-            borderDash: [4, 2],
+            borderColor: '#3498db', backgroundColor: 'transparent',
+            tension: 0.3, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2],
           },
           {
             label: 'L2 (W)',
             data: history.map(r => r.b_act_power),
-            borderColor: '#2ecc71',
-            backgroundColor: 'transparent',
-            tension: 0.3, pointRadius: 0, borderWidth: 1.5,
-            borderDash: [4, 2],
+            borderColor: '#2ecc71', backgroundColor: 'transparent',
+            tension: 0.3, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2],
           },
           {
             label: 'L3 (W)',
             data: history.map(r => r.c_act_power),
-            borderColor: '#f39c12',
-            backgroundColor: 'transparent',
-            tension: 0.3, pointRadius: 0, borderWidth: 1.5,
-            borderDash: [4, 2],
+            borderColor: '#f39c12', backgroundColor: 'transparent',
+            tension: 0.3, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2],
           },
         ],
       },
@@ -115,6 +109,22 @@
     });
   }
 
+  function updateChart(invName) {
+    const c       = charts[invName];
+    const history = byInverter[invName]?.history ?? [];
+    if (!c || !history.length) { buildChart(invName); return; }
+
+    const labels        = makeLabels(history);
+    const tooltipLabels = makeTooltipLabels(history);
+    c.data.labels = labels;
+    c.data.datasets[0].data = history.map(r => r.total_act_power);
+    c.data.datasets[1].data = history.map(r => r.a_act_power);
+    c.data.datasets[2].data = history.map(r => r.b_act_power);
+    c.data.datasets[3].data = history.map(r => r.c_act_power);
+    c.options.plugins.tooltip.callbacks.title = items => tooltipLabels[items[0]?.dataIndex] ?? '';
+    c.update('none');
+  }
+
   async function refresh() {
     if (loading) return;
     loading = true;
@@ -123,23 +133,10 @@
       if (resp.ok) {
         const j = await resp.json();
         if (j.success) {
-          latest           = j.latest;
-          history          = j.history;
-          consumptionToday = j.consumptionToday;
-          serviceOnline    = j.serviceOnline;
-          lastUpdated      = new Date();
-
-          if (chart) {
-            const labels        = makeLabels(history);
-            const tooltipLabels = makeTooltipLabels(history);
-            chart.data.labels = labels;
-            chart.data.datasets[0].data = history.map(r => r.total_act_power);
-            chart.data.datasets[1].data = history.map(r => r.a_act_power);
-            chart.data.datasets[2].data = history.map(r => r.b_act_power);
-            chart.data.datasets[3].data = history.map(r => r.c_act_power);
-            chart.options.plugins.tooltip.callbacks.title = items => tooltipLabels[items[0]?.dataIndex] ?? '';
-            chart.update('none');
-          }
+          shellInverters = j.shellInverters;
+          byInverter     = j.byInverter;
+          lastUpdated    = new Date();
+          for (const inv of shellInverters) updateChart(inv.name);
         }
       }
     } catch {}
@@ -150,7 +147,7 @@
     const { Chart, registerables } = await import('chart.js');
     Chart.register(...registerables);
     ChartClass = Chart;
-    buildChart();
+    for (const inv of shellInverters) buildChart(inv.name);
     lastUpdated = new Date();
     interval = setInterval(refresh, 30_000);
 
@@ -161,7 +158,7 @@
 
   onDestroy(() => {
     clearInterval(interval);
-    chart?.destroy();
+    for (const c of Object.values(charts)) c?.destroy();
   });
 </script>
 
@@ -177,44 +174,47 @@
     {#if lastUpdated}
       <span class="badge bg-secondary">{timeAgo(lastUpdated.toISOString())}</span>
     {/if}
-    {#if serviceOnline}
-      <span class="badge bg-success">Online</span>
-    {:else if latest}
-      <span class="badge bg-warning text-dark">Offline</span>
-    {:else}
-      <span class="badge bg-secondary">Keine Daten</span>
-    {/if}
     <button class="btn btn-warning btn-sm" on:click={refresh} disabled={loading}>
       <i class="bi bi-arrow-clockwise {loading ? 'spin' : ''}"></i>
     </button>
   </div>
 </div>
 
-{#if !shellyEnabled}
+{#if shellInverters.length === 0}
 <div class="alert alert-warning">
   <i class="bi bi-exclamation-triangle me-2"></i>
   Kein Shelly konfiguriert. Bitte die URL unter
-  <a href="/admin/inverters">Admin → Inverter Settings</a> eintragen.
-</div>
-{:else if !latest}
-<div class="alert alert-info">
-  <i class="bi bi-info-circle me-2"></i>
-  Noch keine Messwerte vorhanden. Warte auf den ersten Sync...
+  <a href="/admin/inverters">Admin → Inverter Settings</a> pro Inverter eintragen.
 </div>
 {:else}
 
-<!-- Live-Karte -->
+{#each shellInverters as inv}
+{@const d = byInverter[inv.name]}
+{@const latest = d?.latest ?? null}
+{@const consumptionToday = d?.consumptionToday ?? null}
+{@const online = isOnline(latest?.ts)}
+
 <div class="card shadow-sm mb-4">
   <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
-    <span><i class="bi bi-activity me-2 text-danger"></i>Live – aktueller Verbrauch</span>
-    <small class="text-muted fw-normal">{timeAgo(latest?.ts)}</small>
+    <span>
+      <i class="bi bi-plug-fill me-2" style="color:{inv.color}"></i>{inv.name}
+    </span>
+    <span class="badge {online ? 'bg-success' : latest ? 'bg-warning text-dark' : 'bg-secondary'}">
+      {online ? 'Online' : latest ? 'Offline' : 'Keine Daten'}
+    </span>
   </div>
+
+  {#if !latest}
+  <div class="card-body">
+    <div class="text-muted small"><i class="bi bi-info-circle me-1"></i>Noch keine Messwerte. Warte auf ersten Sync...</div>
+  </div>
+  {:else}
   <div class="card-body">
 
-    <!-- Gesamtverbrauch groß -->
+    <!-- Gesamtverbrauch -->
     <div class="text-center mb-4">
       <div class="display-4 fw-bold text-danger">{fmt(latest.total_act_power, 0)} <small class="fs-4 text-muted">W</small></div>
-      <div class="text-muted small">Gesamtverbrauch</div>
+      <div class="text-muted small">Gesamtverbrauch · {timeAgo(latest.ts)}</div>
       {#if consumptionToday != null}
         <div class="mt-1">
           <span class="badge bg-secondary fs-6">
@@ -227,7 +227,7 @@
     </div>
 
     <!-- Phasen -->
-    <div class="row g-3 text-center">
+    <div class="row g-3 text-center mb-3">
       <div class="col-4">
         <div class="p-3 rounded" style="background:rgba(52,152,219,0.1);border:1px solid rgba(52,152,219,0.3)">
           <div class="fw-bold fs-5 text-primary">{fmt(latest.a_act_power, 0)} W</div>
@@ -257,20 +257,17 @@
       </div>
     </div>
 
-  </div>
-</div>
+    <!-- 24h Chart -->
+    {#if d?.history?.length > 0}
+    <div style="min-height:240px">
+      <canvas bind:this={canvases[inv.name]} style="max-height:240px"></canvas>
+    </div>
+    {/if}
 
-<!-- 24h Chart -->
-{#if history.length > 0}
-<div class="card shadow-sm mb-4">
-  <div class="card-header fw-semibold">
-    <i class="bi bi-graph-up me-2 text-danger"></i>Verbrauch letzte 24 Stunden
   </div>
-  <div class="card-body" style="min-height:280px">
-    <canvas bind:this={canvas} style="max-height:280px"></canvas>
-  </div>
+  {/if}
 </div>
-{/if}
+{/each}
 
 {/if}
 

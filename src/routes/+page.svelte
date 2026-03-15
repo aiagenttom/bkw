@@ -10,8 +10,8 @@
   let hasProfile            = data.hasProfile;
   let ankerChargeToday      = data.ankerChargeToday    ?? {};
   let ankerDischargeToday   = data.ankerDischargeToday ?? {};
-  let shellyLive            = data.shellyLive          ?? null;
-  let shellyConsumptionToday = data.shellyConsumptionToday ?? null;
+  let shellyLiveByInv             = data.shellyLiveByInv            ?? {};
+  let shellyConsumptionTodayByInv = data.shellyConsumptionTodayByInv ?? {};
   let selInv    = 'all';
   let selDate   = today;
   let lastUpdate = '';
@@ -204,8 +204,8 @@
           hasProfile            = savJ.hasProfile;
           ankerChargeToday       = savJ.ankerChargeToday    ?? {};
           ankerDischargeToday    = savJ.ankerDischargeToday ?? {};
-          shellyLive             = savJ.shellyLive          ?? shellyLive;
-          shellyConsumptionToday = savJ.shellyConsumptionToday ?? shellyConsumptionToday;
+          shellyLiveByInv             = savJ.shellyLiveByInv             ?? shellyLiveByInv;
+          shellyConsumptionTodayByInv = savJ.shellyConsumptionTodayByInv ?? shellyConsumptionTodayByInv;
         }
       } else {
         const histR = await fetch(`/api/historical-live?date=${selDate}`);
@@ -310,14 +310,20 @@
   </div>
 </div>
 
-<!-- Shelly Energiebilanz -->
-{#if shellyLive}
-{@const solarNow = Object.values(liveData).reduce((s, d) => s + (d.power_ac ?? 0), 0)}
-{@const consumNow = shellyLive.total_act_power ?? 0}
+<!-- Shelly Energiebilanz (pro Inverter mit konfigurierter Shelly-URL) -->
+{#each visibleInverters.filter(i => shellyLiveByInv[i.name]) as sinv}
+{@const sl = shellyLiveByInv[sinv.name]}
+{@const solarNow   = liveData[sinv.name]?.power_ac ?? 0}
+{@const consumNow  = sl.total_act_power ?? 0}
 {@const balanceNow = solarNow - consumNow}
+{@const consumToday = shellyConsumptionTodayByInv[sinv.name]}
 <div class="card shadow-sm mb-3 border-0" style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%)">
   <div class="card-body py-2 px-3">
     <div class="d-flex flex-wrap align-items-center gap-3 justify-content-between">
+      <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-plug-fill text-danger" style="font-size:.9rem"></i>
+        <span style="font-size:.75rem;color:#8899aa;font-weight:600">{sinv.name}</span>
+      </div>
       <div class="d-flex align-items-center gap-1">
         <i class="bi bi-house-fill text-info" style="font-size:1.1rem"></i>
         <div>
@@ -341,35 +347,31 @@
           <div style="font-size:.7rem;color:#8899aa">{balanceNow >= 0 ? '→ Netz' : '← Eigennutz'}</div>
         </div>
       </div>
-      {#if selDate === today}
+      {#if selDate === today && consumToday != null}
       <div class="d-flex align-items-center gap-1 border-start ps-3" style="border-color:#334 !important">
         <i class="bi bi-calendar-day text-secondary" style="font-size:1rem"></i>
         <div>
           <div class="text-white" style="font-size:.85rem">
-            <span class="text-info fw-bold">{shellyConsumptionToday != null ? fmt(shellyConsumptionToday/1000, 2) + ' kWh' : '–'}</span>
-            <span style="color:#8899aa;font-size:.7rem"> Verbrauch heute</span>
+            <span class="text-info fw-bold">{fmt(consumToday/1000, 2)} kWh</span>
+            <span style="color:#8899aa;font-size:.7rem"> heute</span>
           </div>
-          {#if shellyConsumptionToday != null}
-          {@const totalSolarWh = Object.values(liveData).reduce((s, d) => s + (d.yield_day ?? 0), 0)}
-          {@const selfCover = totalSolarWh > 0 ? Math.min(100, Math.round(totalSolarWh / shellyConsumptionToday * 100)) : 0}
-          <div style="font-size:.7rem;color:#8899aa">
-            {selfCover}% Eigendeckung
-          </div>
-          {/if}
+          {@const solarWh    = (liveData[sinv.name]?.yield_day ?? 0)}
+          {@const selfCover  = consumToday > 0 ? Math.min(100, Math.round(solarWh / consumToday * 100)) : 0}
+          <div style="font-size:.7rem;color:#8899aa">{selfCover}% Eigendeckung</div>
         </div>
       </div>
       {/if}
       <div style="font-size:.65rem;color:#556">
-        {#if shellyLive.a_act_power != null}
-          L1 {fmt(shellyLive.a_act_power,0)}W &nbsp;
-          L2 {fmt(shellyLive.b_act_power,0)}W &nbsp;
-          L3 {fmt(shellyLive.c_act_power,0)}W
+        {#if sl.a_act_power != null}
+          L1 {fmt(sl.a_act_power,0)}W &nbsp;
+          L2 {fmt(sl.b_act_power,0)}W &nbsp;
+          L3 {fmt(sl.c_act_power,0)}W
         {/if}
       </div>
     </div>
   </div>
 </div>
-{/if}
+{/each}
 
 <!-- Live cards -->
 <div class="row g-3 mb-4">

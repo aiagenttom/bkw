@@ -180,17 +180,23 @@ export async function load() {
   }
 
   // ── Shelly Pro 3EM – aktueller Verbrauch + Tages-Wh ────────────────────────
-  const shellyLive = db.prepare(
-    'SELECT * FROM shelly_readings ORDER BY created_at DESC LIMIT 1'
-  ).get() ?? null;
-
-  const shellyConsumptionToday = db.prepare(`
-    SELECT ROUND(SUM(CASE WHEN total_act_power > 0 THEN total_act_power ELSE 0 END) * ? / 60.0, 1) AS wh
-    FROM shelly_readings
-    WHERE date(datetime(created_at, '+' || ? || ' hours')) = ?
-  `).get(syncMin, tzHours, today)?.wh ?? null;
+  // ── Shelly per Inverter ─────────────────────────────────────────────────────
+  const shellyLiveByInv            = {};
+  const shellyConsumptionTodayByInv = {};
+  for (const inv of inverters) {
+    if (!inv.shelly_url?.trim()) continue;
+    shellyLiveByInv[inv.name] = db.prepare(
+      'SELECT * FROM shelly_readings WHERE inverter_name = ? ORDER BY created_at DESC LIMIT 1'
+    ).get(inv.name) ?? null;
+    shellyConsumptionTodayByInv[inv.name] = db.prepare(`
+      SELECT ROUND(SUM(CASE WHEN total_act_power > 0 THEN total_act_power ELSE 0 END) * ? / 60.0, 1) AS wh
+      FROM shelly_readings
+      WHERE inverter_name = ?
+        AND date(datetime(created_at, '+' || ? || ' hours')) = ?
+    `).get(syncMin, inv.name, tzHours, today)?.wh ?? null;
+  }
 
   return { inverters, summary, liveData, settings, today, todaySavings, todaySavingsProfile,
            todaySavingsPowerbank, hasProfile, ankerChargeToday, ankerDischargeToday,
-           shellyLive, shellyConsumptionToday };
+           shellyLiveByInv, shellyConsumptionTodayByInv };
 }

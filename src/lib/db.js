@@ -151,6 +151,7 @@ db.exec(`
 db.exec(`
   CREATE TABLE IF NOT EXISTS shelly_readings (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    inverter_name    TEXT,   -- Welcher Inverter/Standort (NULL = global/legacy)
     created_at       TEXT NOT NULL DEFAULT (datetime('now')),
     total_act_power  REAL,   -- Gesamtverbrauch in W (Summe aller 3 Phasen)
     a_act_power      REAL,   -- Phase L1 in W
@@ -162,7 +163,14 @@ db.exec(`
     total_energy_wh  REAL    -- Kumulierter Gesamtverbrauch in Wh (von EMData)
   );
   CREATE INDEX IF NOT EXISTS idx_shelly_readings_time ON shelly_readings(created_at);
+  CREATE INDEX IF NOT EXISTS idx_shelly_readings_inv  ON shelly_readings(inverter_name, created_at);
 `);
+
+// Migrations: neue Spalten zu bestehenden Tabellen hinzufügen (idempotent)
+for (const sql of [
+  "ALTER TABLE inverters       ADD COLUMN shelly_url   TEXT",
+  "ALTER TABLE shelly_readings ADD COLUMN inverter_name TEXT",
+]) { try { db.exec(sql); } catch {} }
 
 // Anker SOLIX Powerbank live readings (raw, 5-min resolution)
 db.exec(`

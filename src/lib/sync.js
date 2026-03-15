@@ -447,15 +447,21 @@ export async function syncAnker() {
 }
 
 /**
- * Fetch Shelly Pro 3EM live data and persist to shelly_readings.
+ * Fetch Shelly Pro 3EM live data for all inverters that have a shelly_url configured.
  * Uses Shelly Gen2 RPC API:
  *   GET /rpc/EM.GetStatus?id=0    → live power per phase
  *   GET /rpc/EMData.GetStatus?id=0 → cumulative energy (Wh)
  */
 export async function syncShelly() {
-  const url = getSetting('shelly_url');
-  if (!url?.trim()) return;
+  const inverters = db.prepare(
+    "SELECT name, shelly_url FROM inverters WHERE enabled=1 AND shelly_url IS NOT NULL AND shelly_url != ''"
+  ).all();
+  if (!inverters.length) return;
 
+  await Promise.allSettled(inverters.map(inv => syncShellyOne(inv.name, inv.shelly_url)));
+}
+
+async function syncShellyOne(inverterName, url) {
   const base = url.trim().replace(/\/$/, '');
   let emStatus = null, emData = null;
 
@@ -467,20 +473,21 @@ export async function syncShelly() {
     if (r1.status === 'fulfilled' && r1.value.ok) emStatus = await r1.value.json();
     if (r2.status === 'fulfilled' && r2.value.ok) emData   = await r2.value.json();
   } catch (e) {
-    console.warn(`[shelly] fetch failed: ${e.message}`);
+    console.warn(`[shelly:${inverterName}] fetch failed: ${e.message}`);
     return;
   }
 
-  if (!emStatus) { console.warn('[shelly] no EM status returned'); return; }
+  if (!emStatus) { console.warn(`[shelly:${inverterName}] no EM status returned`); return; }
 
   const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
   db.prepare(`
     INSERT INTO shelly_readings
-      (created_at, total_act_power, a_act_power, b_act_power, c_act_power,
+      (inverter_name, created_at, total_act_power, a_act_power, b_act_power, c_act_power,
        a_voltage, b_voltage, c_voltage, total_energy_wh)
-    VALUES (?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
   `).run(
+    inverterName,
     now,
     emStatus.total_act_power ?? null,
     emStatus.a_act_power     ?? null,
@@ -492,13 +499,17 @@ export async function syncShelly() {
     emData?.total_act        ?? null,
   );
 
-  // Keep last 1440 readings (24h × 1min)
-  db.prepare(
-    `DELETE FROM shelly_readings WHERE id NOT IN
-     (SELECT id FROM shelly_readings ORDER BY created_at DESC LIMIT 1440)`
-  ).run();
+  // Keep last 1440 readings per inverter (24h × 1min)
+  db.prepare(`
+    DELETE FROM shelly_readings
+    WHERE inverter_name = ? AND id NOT IN (
+      SELECT id FROM shelly_readings
+      WHERE inverter_name = ?
+      ORDER BY created_at DESC LIMIT 1440
+    )
+  `).run(inverterName, inverterName);
 
-  console.log(`[shelly] ${emStatus.total_act_power ?? '?'} W (L1:${emStatus.a_act_power ?? '?'} L2:${emStatus.b_act_power ?? '?'} L3:${emStatus.c_act_power ?? '?'})`);
+  console.log(`[shelly:${inverterName}] ${emStatus.total_act_power ?? '?'} W (L1:${emStatus.a_act_power ?? '?'} L2:${emStatus.b_act_power ?? '?'} L3:${emStatus.c_act_power ?? '?'})`);
 }
 
 /**

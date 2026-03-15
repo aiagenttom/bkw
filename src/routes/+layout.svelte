@@ -33,6 +33,11 @@
             <i class="bi bi-battery-charging"></i><span class="d-none d-sm-inline ms-1">Powerbank</span>
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link" class:active={path.startsWith('/verbrauch')} href="/verbrauch">
+            <i class="bi bi-plug-fill"></i><span class="d-none d-sm-inline ms-1">Verbrauch</span>
+          </a>
+        </li>
         {#if isAdmin}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" class:active={path.startsWith('/admin')}

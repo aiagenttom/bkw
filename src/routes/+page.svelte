@@ -348,18 +348,18 @@
         </div>
       </div>
       {#if selDate === today && consumToday != null}
-      <div class="d-flex align-items-center gap-1 border-start ps-3" style="border-color:#334 !important">
-        <i class="bi bi-calendar-day text-secondary" style="font-size:1rem"></i>
-        <div>
-          <div class="text-white" style="font-size:.85rem">
-            <span class="text-info fw-bold">{fmt(consumToday/1000, 2)} kWh</span>
-            <span style="color:#8899aa;font-size:.7rem"> heute</span>
+        {@const solarWh   = (liveData[sinv.name]?.yield_day ?? 0)}
+        {@const selfCover = consumToday > 0 ? Math.min(100, Math.round(solarWh / consumToday * 100)) : 0}
+        <div class="d-flex align-items-center gap-1 border-start ps-3" style="border-color:#334 !important">
+          <i class="bi bi-calendar-day text-secondary" style="font-size:1rem"></i>
+          <div>
+            <div class="text-white" style="font-size:.85rem">
+              <span class="text-info fw-bold">{fmt(consumToday/1000, 2)} kWh</span>
+              <span style="color:#8899aa;font-size:.7rem"> heute</span>
+            </div>
+            <div style="font-size:.7rem;color:#8899aa">{selfCover}% Eigendeckung</div>
           </div>
-          {@const solarWh    = (liveData[sinv.name]?.yield_day ?? 0)}
-          {@const selfCover  = consumToday > 0 ? Math.min(100, Math.round(solarWh / consumToday * 100)) : 0}
-          <div style="font-size:.7rem;color:#8899aa">{selfCover}% Eigendeckung</div>
         </div>
-      </div>
       {/if}
       <div style="font-size:.65rem;color:#556">
         {#if sl.a_act_power != null}

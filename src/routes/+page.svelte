@@ -311,7 +311,7 @@
 </div>
 
 <!-- Shelly Energiebilanz (pro Inverter mit konfigurierter Shelly-URL) -->
-{#each visibleInverters.filter(i => shellyLiveByInv[i.name]) as sinv}
+{#each [] as sinv}
 {@const sl = shellyLiveByInv[sinv.name]}
 {@const solarNow   = liveData[sinv.name]?.power_ac ?? 0}
 {@const consumNow  = sl.total_act_power ?? 0}

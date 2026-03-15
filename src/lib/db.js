@@ -147,6 +147,13 @@ db.exec(`
   );
 `);
 
+// Migrations: neue Spalten zu bestehenden Tabellen hinzufügen (idempotent)
+// Muss VOR dem shelly_readings CREATE TABLE laufen, damit der Index auf inverter_name funktioniert
+for (const sql of [
+  "ALTER TABLE inverters       ADD COLUMN shelly_url   TEXT",
+  "ALTER TABLE shelly_readings ADD COLUMN inverter_name TEXT",
+]) { try { db.exec(sql); } catch {} }
+
 // Shelly Pro 3EM – Stromverbrauchsmessung (live readings, 1-min resolution)
 db.exec(`
   CREATE TABLE IF NOT EXISTS shelly_readings (
@@ -165,12 +172,6 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_shelly_readings_time ON shelly_readings(created_at);
   CREATE INDEX IF NOT EXISTS idx_shelly_readings_inv  ON shelly_readings(inverter_name, created_at);
 `);
-
-// Migrations: neue Spalten zu bestehenden Tabellen hinzufügen (idempotent)
-for (const sql of [
-  "ALTER TABLE inverters       ADD COLUMN shelly_url   TEXT",
-  "ALTER TABLE shelly_readings ADD COLUMN inverter_name TEXT",
-]) { try { db.exec(sql); } catch {} }
 
 // Anker SOLIX Powerbank live readings (raw, 5-min resolution)
 db.exec(`

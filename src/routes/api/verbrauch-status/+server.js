@@ -25,11 +25,18 @@ export function GET() {
     `).get(inv.name) ?? null;
 
     const history = db.prepare(`
-      SELECT strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS ts,
-             total_act_power, a_act_power, b_act_power, c_act_power
+      SELECT
+        strftime('%Y-%m-%dT%H:', created_at) ||
+          printf('%02d', (cast(strftime('%M', created_at) AS int) / 15) * 15) || ':00Z' AS ts,
+        ROUND(AVG(total_act_power), 1) AS total_act_power,
+        ROUND(AVG(a_act_power),     1) AS a_act_power,
+        ROUND(AVG(b_act_power),     1) AS b_act_power,
+        ROUND(AVG(c_act_power),     1) AS c_act_power
       FROM shelly_readings
       WHERE inverter_name = ? AND created_at >= datetime('now', '-24 hours')
-      ORDER BY created_at ASC
+      GROUP BY strftime('%Y-%m-%dT%H', created_at),
+               cast(strftime('%M', created_at) AS int) / 15
+      ORDER BY ts ASC
     `).all(inv.name);
 
     const consumptionToday = db.prepare(`

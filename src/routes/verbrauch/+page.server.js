@@ -20,35 +20,44 @@ function utcToLocalDate(utcStr, tzHours) {
   return d.toISOString().substring(0, 10);
 }
 
+const t = (label, start) => {
+  const ms = Date.now() - start;
+  console.log(`[verbrauch] ${label}: ${ms}ms`);
+  return Date.now();
+};
+
 export async function load({ url }) {
+  const T0 = Date.now();
+  console.log('[verbrauch] --- load START ---');
+
   const today   = getLocalToday();
   const tzHours = getTzOffset(today);
   const syncMin = parseInt(getSetting('sync_interval') ?? '1');
+  let ts = t('init', T0);
 
-  // Alle Inverter mit Shelly (nur für Dropdown, kein Data-Load)
+  // Alle Inverter mit Shelly (nur für Dropdown)
   const shellInverters = db.prepare(
     "SELECT id, name, color, shelly_url, shelly_feedin_phase FROM inverters WHERE enabled=1 AND shelly_url IS NOT NULL AND shelly_url != '' ORDER BY name"
   ).all();
+  ts = t('shellInverters query', ts);
 
   if (!shellInverters.length) {
+    console.log('[verbrauch] no shelly inverters configured');
     return { shellInverters: [], selInv: null, byInverter: {}, today, selDate: today, minDate: today };
   }
 
-  // Inverter aus URL-Parameter, default: erster
   const selInvName = url.searchParams.get('inv') ?? shellInverters[0].name;
   const inv = shellInverters.find(i => i.name === selInvName) ?? shellInverters[0];
 
-  // Datum aus URL-Parameter, default: heute
   let selDate = url.searchParams.get('date') ?? today;
   if (selDate > today) selDate = today;
 
-  // minDate: nur bei historischer Navigation wirklich aus DB lesen,
-  // beim initialen Load (heute) reicht ein 90-Tage-Fallback
   let minDate;
   if (selDate < today) {
     const minRow = db.prepare(
       'SELECT MIN(created_at) AS ts FROM shelly_readings WHERE inverter_name = ?'
     ).get(inv.name);
+    ts = t('minDate query', ts);
     minDate = minRow?.ts ? (utcToLocalDate(minRow.ts, tzHours) ?? today) : today;
   } else {
     const d = new Date(today + 'T00:00:00Z');
@@ -59,8 +68,9 @@ export async function load({ url }) {
 
   const { startUtc, endUtc } = dayUtcRange(selDate, tzHours);
   const fp = inv.shelly_feedin_phase ?? 'b';
+  console.log(`[verbrauch] inv=${inv.name} date=${selDate} range=${startUtc} → ${endUtc}`);
 
-  // Letzter Messwert (nur für heute)
+  // Letzter Messwert (nur heute)
   const latest = selDate === today ? (db.prepare(`
     SELECT total_act_power,
            CASE WHEN ? = 'a' THEN a_act_power ELSE ABS(a_act_power) END AS a_act_power,
@@ -71,8 +81,9 @@ export async function load({ url }) {
     FROM shelly_readings WHERE inverter_name = ?
     ORDER BY created_at DESC LIMIT 1
   `).get(fp, fp, fp, inv.name) ?? null) : null;
+  ts = t('latest query', ts);
 
-  // 15-min-Durchschnitt für gewählten Tag
+  // 15-min-Durchschnitt
   const history = db.prepare(`
     SELECT
       strftime('%Y-%m-%dT%H:', created_at) ||
@@ -87,12 +98,17 @@ export async function load({ url }) {
              cast(strftime('%M', created_at) AS int) / 15
     ORDER BY ts ASC
   `).all(fp, fp, fp, inv.name, startUtc, endUtc);
+  ts = t(`history query (${history.length} rows)`, ts);
 
+  // Tagesverbrauch
   const consumptionToday = db.prepare(`
     SELECT ROUND(SUM(CASE WHEN total_act_power > 0 THEN total_act_power ELSE 0 END) * ? / 60.0, 1) AS wh
     FROM shelly_readings
     WHERE inverter_name = ? AND created_at >= ? AND created_at < ?
   `).get(syncMin, inv.name, startUtc, endUtc)?.wh ?? null;
+  t(`consumptionToday query`, ts);
+
+  console.log(`[verbrauch] --- load DONE ${Date.now() - T0}ms total ---`);
 
   return {
     shellInverters,

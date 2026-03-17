@@ -150,12 +150,15 @@ db.exec(`
 // Migrations: neue Spalten zu bestehenden Tabellen hinzufügen (idempotent)
 // Muss VOR dem shelly_readings CREATE TABLE laufen, damit der Index auf inverter_name funktioniert
 for (const sql of [
-  "ALTER TABLE inverters       ADD COLUMN shelly_url   TEXT",
-  "ALTER TABLE shelly_readings ADD COLUMN inverter_name TEXT",
-  "ALTER TABLE inverters       ADD COLUMN shelly_l1_abs       INTEGER NOT NULL DEFAULT 1",
-  "ALTER TABLE inverters       ADD COLUMN shelly_l2_abs       INTEGER NOT NULL DEFAULT 0",
-  "ALTER TABLE inverters       ADD COLUMN shelly_l3_abs       INTEGER NOT NULL DEFAULT 1",
-  "ALTER TABLE inverters       ADD COLUMN shelly_feedin_phase TEXT DEFAULT 'b'",
+  "ALTER TABLE inverters       ADD COLUMN shelly_url          TEXT",
+  "ALTER TABLE shelly_readings ADD COLUMN inverter_name        TEXT",
+  "ALTER TABLE inverters       ADD COLUMN shelly_l1_abs        INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE inverters       ADD COLUMN shelly_l2_abs        INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE inverters       ADD COLUMN shelly_l3_abs        INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE inverters       ADD COLUMN shelly_feedin_phase  TEXT DEFAULT 'b'",
+  // Indexes explizit hier erstellen – falls sie wegen früherer Reihenfolge-Bug nie angelegt wurden
+  "CREATE INDEX IF NOT EXISTS idx_shelly_readings_time ON shelly_readings(created_at)",
+  "CREATE INDEX IF NOT EXISTS idx_shelly_readings_inv  ON shelly_readings(inverter_name, created_at)",
 ]) { try { db.exec(sql); } catch {} }
 
 // Shelly Pro 3EM – Stromverbrauchsmessung (live readings, 1-min resolution)
@@ -182,6 +185,7 @@ db.exec(`
 if (!db.prepare("SELECT 1 FROM app_settings WHERE key = 'shelly_data_corrected'").get()) {
   try {
     db.exec(`
+      DELETE FROM shelly_readings WHERE inverter_name IS NULL;
       UPDATE shelly_readings SET a_act_power = ABS(a_act_power) WHERE a_act_power < 0;
       UPDATE shelly_readings SET c_act_power = ABS(c_act_power) WHERE c_act_power < 0;
       UPDATE shelly_readings

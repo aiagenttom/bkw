@@ -3,6 +3,19 @@ import db from '$lib/db.js';
 import { syncAll, syncDaily, syncSpottyPrices, syncWeather, syncAnker, syncShelly, pruneOldData } from '$lib/sync.js';
 import cron from 'node-cron';
 
+// ── Suppress noisy bot-scan request logs ─────────────────────────────────────
+// Bots constantly probe for .php/.asp/etc – filter those [4xx] lines from logs.
+const BOT_PATH_RE = /\.(php\d*|asp|aspx|env|git|cgi|bak|sql|ini|cfg|jsp|cfm|py|rb|pl|sh|xml|json\.php)$/i;
+const LOG_LINE_RE = /^\[\d{3}\] (GET|POST|HEAD|OPTIONS) \//;
+const _origLog = console.log;
+console.log = (...args) => {
+  if (args.length === 1 && typeof args[0] === 'string') {
+    const s = args[0];
+    if (LOG_LINE_RE.test(s) && BOT_PATH_RE.test(s)) return; // skip bot-scan log lines
+  }
+  _origLog(...args);
+};
+
 // ── Cron scheduler (starts once at module load) ───────────────────────────────
 let cronJob = null;
 let cronExpr = null;
@@ -62,6 +75,11 @@ startPrune();
 
 // ── Handle hook ───────────────────────────────────────────────────────────────
 export async function handle({ event, resolve }) {
+  // Fast-reject bot scans for non-existent file extensions
+  if (BOT_PATH_RE.test(event.url.pathname)) {
+    return new Response(null, { status: 404 });
+  }
+
   // Attach session to locals
   event.locals.user = getSession(event.cookies) ?? null;
 

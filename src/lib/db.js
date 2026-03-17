@@ -178,15 +178,19 @@ db.exec(`
 `);
 
 // Einmalige Datenkorrektur: negative L1/L3-Werte auf abs() setzen, Total neu berechnen
-try {
-  db.exec(`
-    UPDATE shelly_readings SET a_act_power = ABS(a_act_power) WHERE a_act_power < 0;
-    UPDATE shelly_readings SET c_act_power = ABS(c_act_power) WHERE c_act_power < 0;
-    UPDATE shelly_readings
-      SET total_act_power = a_act_power + b_act_power + c_act_power
-      WHERE a_act_power IS NOT NULL AND b_act_power IS NOT NULL AND c_act_power IS NOT NULL;
-  `);
-} catch {}
+// Wird nur einmalig ausgeführt (Flag in app_settings)
+if (!db.prepare("SELECT 1 FROM app_settings WHERE key = 'shelly_data_corrected'").get()) {
+  try {
+    db.exec(`
+      UPDATE shelly_readings SET a_act_power = ABS(a_act_power) WHERE a_act_power < 0;
+      UPDATE shelly_readings SET c_act_power = ABS(c_act_power) WHERE c_act_power < 0;
+      UPDATE shelly_readings
+        SET total_act_power = a_act_power + b_act_power + c_act_power
+        WHERE a_act_power IS NOT NULL AND b_act_power IS NOT NULL AND c_act_power IS NOT NULL;
+    `);
+    db.prepare("INSERT INTO app_settings (key, value) VALUES ('shelly_data_corrected', '1')").run();
+  } catch {}
+}
 
 // Anker SOLIX Powerbank live readings (raw, 5-min resolution)
 db.exec(`

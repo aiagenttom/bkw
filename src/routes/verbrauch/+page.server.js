@@ -5,6 +5,24 @@ function getSetting(key) {
   return db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key)?.value ?? null;
 }
 
+/** Berechnet UTC-Start und -End für einen lokalen Tag (index-kompatibel) */
+function dayUtcRange(localDate, tzHours) {
+  // localDate 00:00:00 local = localDate 00:00:00 UTC minus tzHours
+  const startD = new Date(`${localDate}T00:00:00Z`);
+  startD.setUTCHours(startD.getUTCHours() - tzHours);
+  const endD = new Date(startD.getTime() + 24 * 3_600_000);
+  const fmt = d => d.toISOString().replace('T', ' ').substring(0, 19);
+  return { startUtc: fmt(startD), endUtc: fmt(endD) };
+}
+
+/** Konvertiert UTC-Timestamp-String zu lokalem Datums-String YYYY-MM-DD */
+function utcToLocalDate(utcStr, tzHours) {
+  if (!utcStr) return null;
+  const d = new Date(utcStr.replace(' ', 'T') + 'Z');
+  d.setUTCHours(d.getUTCHours() + tzHours);
+  return d.toISOString().substring(0, 10);
+}
+
 export async function load({ url }) {
   const today   = getLocalToday();
   const tzHours = getTzOffset(today);
@@ -14,12 +32,12 @@ export async function load({ url }) {
   let selDate = url.searchParams.get('date') ?? today;
   if (selDate > today) selDate = today;
 
-  // Frühestes Datum mit Shelly-Daten
-  const minRow = db.prepare(
-    `SELECT MIN(date(datetime(created_at, '+' || ? || ' hours'))) AS d FROM shelly_readings`
-  ).get(tzHours);
-  const minDate = minRow?.d ?? today;
+  // Frühestes Datum mit Shelly-Daten — MIN(created_at) ist dank Index schnell
+  const minRow = db.prepare('SELECT MIN(created_at) AS ts FROM shelly_readings').get();
+  const minDate = minRow?.ts ? (utcToLocalDate(minRow.ts, tzHours) ?? today) : today;
   if (selDate < minDate) selDate = minDate;
+
+  const { startUtc, endUtc } = dayUtcRange(selDate, tzHours);
 
   // Alle Inverter mit konfigurierter Shelly-URL
   const shellInverters = db.prepare(
@@ -30,7 +48,7 @@ export async function load({ url }) {
   for (const inv of shellInverters) {
     const fp = inv.shelly_feedin_phase ?? 'b';
 
-    // Letzter Messwert (nur für heute relevant)
+    // Letzter Messwert (nur für heute)
     const latest = selDate === today ? (db.prepare(`
       SELECT total_act_power,
              CASE WHEN ? = 'a' THEN a_act_power ELSE ABS(a_act_power) END AS a_act_power,
@@ -43,7 +61,7 @@ export async function load({ url }) {
       ORDER BY created_at DESC LIMIT 1
     `).get(fp, fp, fp, inv.name) ?? null) : null;
 
-    // 15-min-Durchschnitt für den gewählten Tag
+    // 15-min-Durchschnitt — Index auf (inverter_name, created_at) wird genutzt
     const history = db.prepare(`
       SELECT
         strftime('%Y-%m-%dT%H:', created_at) ||
@@ -53,19 +71,18 @@ export async function load({ url }) {
         ROUND(AVG(CASE WHEN ? = 'b' THEN b_act_power ELSE ABS(b_act_power) END), 1) AS b_act_power,
         ROUND(AVG(CASE WHEN ? = 'c' THEN c_act_power ELSE ABS(c_act_power) END), 1) AS c_act_power
       FROM shelly_readings
-      WHERE inverter_name = ?
-        AND date(datetime(created_at, '+' || ? || ' hours')) = ?
+      WHERE inverter_name = ? AND created_at >= ? AND created_at < ?
       GROUP BY strftime('%Y-%m-%dT%H', created_at),
                cast(strftime('%M', created_at) AS int) / 15
       ORDER BY ts ASC
-    `).all(fp, fp, fp, inv.name, tzHours, selDate);
+    `).all(fp, fp, fp, inv.name, startUtc, endUtc);
 
+    // Tagesverbrauch — ebenfalls per Range
     const consumptionToday = db.prepare(`
       SELECT ROUND(SUM(CASE WHEN total_act_power > 0 THEN total_act_power ELSE 0 END) * ? / 60.0, 1) AS wh
       FROM shelly_readings
-      WHERE inverter_name = ?
-        AND date(datetime(created_at, '+' || ? || ' hours')) = ?
-    `).get(syncMin, inv.name, tzHours, selDate)?.wh ?? null;
+      WHERE inverter_name = ? AND created_at >= ? AND created_at < ?
+    `).get(syncMin, inv.name, startUtc, endUtc)?.wh ?? null;
 
     byInverter[inv.name] = { ...inv, latest, history, consumptionToday };
   }

@@ -28,7 +28,7 @@
     return new Date(d + 'T12:00:00').toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 
-  let ChartClass = null;
+  let ChartCls   = null;
   let chart      = null;
   let canvas;
   let interval;
@@ -64,13 +64,13 @@
 
   function buildChart() {
     const history = selInv ? (byInverter[selInv.name]?.history ?? []) : [];
-    if (!canvas || !browser || !ChartClass || !history.length) return;
+    if (!canvas || !browser || !ChartCls || !history.length) return;
     if (chart) { chart.destroy(); chart = null; }
 
     const labels        = makeLabels(history);
     const tooltipLabels = makeTooltipLabels(history);
 
-    chart = new ChartClass(canvas, {
+    chart = new ChartCls(canvas, {
       type: 'line',
       data: {
         labels,
@@ -90,6 +90,7 @@
         ],
       },
       options: {
+        animation: false,
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
@@ -109,12 +110,6 @@
         },
       },
     });
-  }
-
-  // Chart neu bauen wenn Datum oder Inverter wechselt
-  $: if (browser && ChartClass && (selDate || selInv)) {
-    chart?.destroy(); chart = null;
-    Promise.resolve().then(buildChart);
   }
 
   async function refresh() {
@@ -149,9 +144,10 @@
   }
 
   onMount(async () => {
+    if (!browser) return;
     const { Chart, registerables } = await import('chart.js');
     Chart.register(...registerables);
-    ChartClass = Chart;
+    ChartCls = Chart;
     buildChart();
     lastUpdated = new Date();
     if (isToday) interval = setInterval(refresh, 30_000);

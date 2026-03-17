@@ -183,6 +183,37 @@
   });
 
   onDestroy(() => { clearInterval(interval); chart?.destroy(); });
+
+  // Stundensummierung aus 15-min-History
+  $: hourlyRows = (() => {
+    const invData = selInv ? byInverter[selInv.name] : null;
+    const history = invData?.history ?? [];
+    const prices  = invData?.prices  ?? [];
+    if (!history.length) return [];
+    const map = {};
+    history.forEach((r, i) => {
+      const h = new Date(r.ts).getHours();
+      if (!map[h]) map[h] = { hour: h, wh: 0, priceSum: 0, priceWh: 0, priceCount: 0 };
+      const wh = r.total_act_power > 0 ? r.total_act_power * 0.25 : 0; // 15-min bucket
+      map[h].wh += wh;
+      if (prices[i] != null) { map[h].priceSum += prices[i]; map[h].priceWh += wh; map[h].priceCount++; }
+    });
+    return Object.values(map).sort((a, b) => a.hour - b.hour).map(row => {
+      const avgPrice = row.priceCount > 0 ? row.priceSum / row.priceCount : null;
+      const costEur  = avgPrice != null ? row.wh / 1000 * avgPrice / 100 : null;
+      return { hour: row.hour, wh: row.wh, avgPrice, costEur };
+    });
+  })();
+
+  $: hourlyTotals = (() => {
+    const wh   = hourlyRows.reduce((s, r) => s + r.wh, 0);
+    const cost = hourlyRows.reduce((s, r) => s + (r.costEur ?? 0), 0);
+    // Verbrauchsgewichteter Durchschnittspreis
+    const whWithPrice = hourlyRows.filter(r => r.avgPrice != null).reduce((s, r) => s + r.wh, 0);
+    const sumWP       = hourlyRows.filter(r => r.avgPrice != null).reduce((s, r) => s + r.avgPrice * r.wh, 0);
+    const avgPrice    = whWithPrice > 0 ? sumWP / whWithPrice : null;
+    return { wh, cost: cost > 0 ? cost : null, avgPrice };
+  })();
 </script>
 
 <svelte:head><title>Stromverbrauch – BKW</title></svelte:head>
@@ -332,6 +363,52 @@
     {:else}
     <div class="text-muted small text-center py-3">
       <i class="bi bi-info-circle me-1"></i>Keine Daten für diesen Tag
+    </div>
+    {/if}
+
+    <!-- Stundentabelle -->
+    {#if hourlyRows.length > 0}
+    <div class="table-responsive mt-3">
+      <table class="table table-sm table-hover mb-0" style="font-size:0.82rem">
+        <thead class="table-light">
+          <tr>
+            <th class="text-muted fw-normal">Stunde</th>
+            <th class="text-end text-muted fw-normal">Verbrauch</th>
+            <th class="text-end fw-normal" style="color:#9b59b6">Ø Preis</th>
+            <th class="text-end text-muted fw-normal">Kosten</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each hourlyRows as row}
+          <tr class="{row.wh < 1 ? 'text-muted' : ''}">
+            <td>{String(row.hour).padStart(2,'0')}:00 – {String(row.hour + 1).padStart(2,'0')}:00</td>
+            <td class="text-end font-monospace">
+              {row.wh >= 1000 ? (row.wh/1000).toFixed(2) + ' kWh' : Math.round(row.wh) + ' Wh'}
+            </td>
+            <td class="text-end font-monospace" style="color:#9b59b6">
+              {row.avgPrice != null ? row.avgPrice.toFixed(2) + ' ct' : '–'}
+            </td>
+            <td class="text-end font-monospace">
+              {row.costEur != null ? (row.costEur < 0.01 ? '< 0.01' : row.costEur.toFixed(3)) + ' €' : '–'}
+            </td>
+          </tr>
+          {/each}
+        </tbody>
+        <tfoot>
+          <tr class="fw-semibold border-top" style="border-top-width:2px!important">
+            <td>Gesamt</td>
+            <td class="text-end font-monospace">
+              {hourlyTotals.wh >= 1000 ? (hourlyTotals.wh/1000).toFixed(2) + ' kWh' : Math.round(hourlyTotals.wh) + ' Wh'}
+            </td>
+            <td class="text-end font-monospace" style="color:#9b59b6">
+              {hourlyTotals.avgPrice != null ? hourlyTotals.avgPrice.toFixed(2) + ' ct' : '–'}
+            </td>
+            <td class="text-end font-monospace">
+              {hourlyTotals.cost != null ? hourlyTotals.cost.toFixed(2) + ' €' : '–'}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
     {/if}
 

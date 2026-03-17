@@ -488,7 +488,8 @@ async function syncShellyOne(inverterName, url, feedinPhase = 'b') {
   const aW    = applyAbs(emStatus.a_act_power, 'a');
   const bW    = applyAbs(emStatus.b_act_power, 'b');
   const cW    = applyAbs(emStatus.c_act_power, 'c');
-  const totalW = emStatus.total_act_power ?? null;
+  // Total aus korrigierten Phasenwerten neu berechnen (nicht raw vom API übernehmen)
+  const totalW = (aW != null && bW != null && cW != null) ? aW + bW + cW : emStatus.total_act_power ?? null;
 
   db.prepare(`
     INSERT INTO shelly_readings

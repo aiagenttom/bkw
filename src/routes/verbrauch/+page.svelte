@@ -4,7 +4,7 @@
 
   export let data;
 
-  $: ({ shellInverters, byInverter, today, selDate, minDate } = data);
+  $: ({ shellInverters, selInv, byInverter, today, selDate, minDate } = data);
 
   // Date navigation
   function addDays(d, n) {
@@ -18,15 +18,19 @@
   $: canGoNext = nextDate <= today;
   $: isToday   = selDate === today;
 
-  function dateHref(d) { return `/verbrauch?date=${d}`; }
+  function navHref(date, inv) {
+    const d = date ?? selDate;
+    const i = inv ?? selInv?.name ?? '';
+    return `/verbrauch?date=${d}&inv=${encodeURIComponent(i)}`;
+  }
 
   function formatDate(d) {
     return new Date(d + 'T12:00:00').toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 
-  let ChartClass  = null;
-  let charts      = {};
-  let canvases    = {};
+  let ChartClass = null;
+  let chart      = null;
+  let canvas;
   let interval;
   let lastUpdated = null;
   let loading     = false;
@@ -58,49 +62,35 @@
     });
   }
 
-  function buildChart(invName) {
-    const canvas  = canvases[invName];
-    const history = byInverter[invName]?.history ?? [];
+  function buildChart() {
+    const history = selInv ? (byInverter[selInv.name]?.history ?? []) : [];
     if (!canvas || !browser || !ChartClass || !history.length) return;
-    if (charts[invName]) { charts[invName].destroy(); delete charts[invName]; }
+    if (chart) { chart.destroy(); chart = null; }
 
     const labels        = makeLabels(history);
     const tooltipLabels = makeTooltipLabels(history);
 
-    charts[invName] = new ChartClass(canvas, {
+    chart = new ChartClass(canvas, {
       type: 'line',
       data: {
         labels,
         datasets: [
-          {
-            label: 'Gesamt (W)',
-            data: history.map(r => r.total_act_power),
+          { label: 'Gesamt (W)', data: history.map(r => r.total_act_power),
             borderColor: '#e74c3c', backgroundColor: 'rgba(231,76,60,0.1)',
-            fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
-          },
-          {
-            label: 'L1 (W)',
-            data: history.map(r => r.a_act_power),
+            fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 },
+          { label: 'L1 (W)', data: history.map(r => r.a_act_power),
             borderColor: '#3498db', backgroundColor: 'transparent',
-            tension: 0.3, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2],
-          },
-          {
-            label: 'L2 (W)',
-            data: history.map(r => r.b_act_power),
+            tension: 0.3, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2] },
+          { label: 'L2 (W)', data: history.map(r => r.b_act_power),
             borderColor: '#2ecc71', backgroundColor: 'transparent',
-            tension: 0.3, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2],
-          },
-          {
-            label: 'L3 (W)',
-            data: history.map(r => r.c_act_power),
+            tension: 0.3, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2] },
+          { label: 'L3 (W)', data: history.map(r => r.c_act_power),
             borderColor: '#f39c12', backgroundColor: 'transparent',
-            tension: 0.3, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2],
-          },
+            tension: 0.3, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2] },
         ],
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
@@ -113,62 +103,45 @@
         },
         scales: {
           x: { ticks: { maxTicksLimit: 12, font: { size: 10 } } },
-          y: {
-            beginAtZero: true,
-            title: { display: true, text: 'Leistung (W)', font: { size: 11 } },
-            grid: { color: 'rgba(0,0,0,0.05)' },
-          },
+          y: { beginAtZero: true,
+               title: { display: true, text: 'Leistung (W)', font: { size: 11 } },
+               grid: { color: 'rgba(0,0,0,0.05)' } },
         },
       },
     });
   }
 
-  function rebuildAllCharts() {
-    for (const inv of shellInverters) buildChart(inv.name);
-  }
-
-  function updateChart(invName) {
-    const c       = charts[invName];
-    const history = byInverter[invName]?.history ?? [];
-    if (!c || !history.length) { buildChart(invName); return; }
-
-    const labels        = makeLabels(history);
-    const tooltipLabels = makeTooltipLabels(history);
-    c.data.labels = labels;
-    c.data.datasets[0].data = history.map(r => r.total_act_power);
-    c.data.datasets[1].data = history.map(r => r.a_act_power);
-    c.data.datasets[2].data = history.map(r => r.b_act_power);
-    c.data.datasets[3].data = history.map(r => r.c_act_power);
-    c.options.plugins.tooltip.callbacks.title = items => tooltipLabels[items[0]?.dataIndex] ?? '';
-    c.update('none');
-  }
-
-  // Rebuild charts when selDate changes (SvelteKit navigation)
-  $: if (browser && ChartClass && selDate) {
-    for (const c of Object.values(charts)) c?.destroy();
-    charts = {};
-    // defer to next tick so canvases are bound
-    Promise.resolve().then(rebuildAllCharts);
+  // Chart neu bauen wenn Datum oder Inverter wechselt
+  $: if (browser && ChartClass && (selDate || selInv)) {
+    chart?.destroy(); chart = null;
+    Promise.resolve().then(buildChart);
   }
 
   async function refresh() {
     if (!isToday || loading) return;
     loading = true;
     try {
-      const resp = await fetch('/api/verbrauch-status');
+      const inv = selInv?.name ?? '';
+      const resp = await fetch(`/api/verbrauch-status?inv=${encodeURIComponent(inv)}`);
       if (resp.ok) {
         const j = await resp.json();
-        if (j.success) {
-          for (const inv of j.shellInverters) {
-            if (byInverter[inv.name]) {
-              byInverter[inv.name].latest           = j.byInverter[inv.name].latest;
-              byInverter[inv.name].history          = j.byInverter[inv.name].history;
-              byInverter[inv.name].consumptionToday = j.byInverter[inv.name].consumptionToday;
-            }
-          }
-          byInverter = byInverter; // trigger reactivity
+        if (j.success && inv && j.byInverter[inv]) {
+          byInverter = j.byInverter;
           lastUpdated = new Date();
-          for (const inv of shellInverters) updateChart(inv.name);
+          // Chart updaten statt neu bauen
+          const history = j.byInverter[inv].history ?? [];
+          if (chart && history.length) {
+            chart.data.labels = makeLabels(history);
+            const tl = makeTooltipLabels(history);
+            chart.data.datasets[0].data = history.map(r => r.total_act_power);
+            chart.data.datasets[1].data = history.map(r => r.a_act_power);
+            chart.data.datasets[2].data = history.map(r => r.b_act_power);
+            chart.data.datasets[3].data = history.map(r => r.c_act_power);
+            chart.options.plugins.tooltip.callbacks.title = items => tl[items[0]?.dataIndex] ?? '';
+            chart.update('none');
+          } else {
+            buildChart();
+          }
         }
       }
     } catch {}
@@ -179,19 +152,15 @@
     const { Chart, registerables } = await import('chart.js');
     Chart.register(...registerables);
     ChartClass = Chart;
-    rebuildAllCharts();
+    buildChart();
     lastUpdated = new Date();
     if (isToday) interval = setInterval(refresh, 30_000);
-
     const onVisible = () => { if (document.visibilityState === 'visible' && isToday) refresh(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   });
 
-  onDestroy(() => {
-    clearInterval(interval);
-    for (const c of Object.values(charts)) c?.destroy();
-  });
+  onDestroy(() => { clearInterval(interval); chart?.destroy(); });
 </script>
 
 <svelte:head><title>Stromverbrauch – BKW</title></svelte:head>
@@ -214,10 +183,36 @@
   </div>
 </div>
 
-<!-- Datumsnavigation -->
+{#if shellInverters.length === 0}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle me-2"></i>
+  Kein Shelly konfiguriert. Bitte die URL unter
+  <a href="/admin/inverters">Admin → Inverter Settings</a> pro Inverter eintragen.
+</div>
+{:else}
+
+<!-- Inverter + Datumsnavigation -->
 <div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
+
+  <!-- Inverter-Auswahl -->
+  {#if shellInverters.length > 1}
+  <select class="form-select form-select-sm" style="width:auto"
+          on:change={e => { window.location.href = navHref(selDate, e.target.value); }}>
+    {#each shellInverters as inv}
+      <option value={inv.name} selected={inv.name === selInv?.name}>{inv.name}</option>
+    {/each}
+  </select>
+  {:else}
+  <span class="fw-semibold" style="color:{selInv?.color}">
+    <i class="bi bi-plug-fill me-1"></i>{selInv?.name}
+  </span>
+  {/if}
+
+  <div class="vr d-none d-sm-block"></div>
+
+  <!-- Datum Prev -->
   {#if canGoPrev}
-    <a href={dateHref(prevDate)} class="btn btn-outline-secondary btn-sm" aria-label="Vorheriger Tag">
+    <a href={navHref(prevDate)} class="btn btn-outline-secondary btn-sm" aria-label="Vorheriger Tag">
       <i class="bi bi-chevron-left"></i>
     </a>
   {:else}
@@ -226,11 +221,12 @@
     </button>
   {/if}
 
-  <a href={dateHref(today)} class="btn btn-sm {isToday ? 'btn-primary' : 'btn-outline-primary'}">Heute</a>
+  <a href={navHref(today)} class="btn btn-sm {isToday ? 'btn-primary' : 'btn-outline-primary'}">Heute</a>
   <span class="fw-semibold">{formatDate(selDate)}</span>
 
+  <!-- Datum Next -->
   {#if canGoNext}
-    <a href={dateHref(nextDate)} class="btn btn-outline-secondary btn-sm ms-auto" aria-label="Nächster Tag">
+    <a href={navHref(nextDate)} class="btn btn-outline-secondary btn-sm ms-auto" aria-label="Nächster Tag">
       <i class="bi bi-chevron-right"></i>
     </a>
   {:else}
@@ -240,36 +236,25 @@
   {/if}
 </div>
 
-{#if shellInverters.length === 0}
-<div class="alert alert-warning">
-  <i class="bi bi-exclamation-triangle me-2"></i>
-  Kein Shelly konfiguriert. Bitte die URL unter
-  <a href="/admin/inverters">Admin → Inverter Settings</a> pro Inverter eintragen.
-</div>
-{:else}
-
-{#each shellInverters as inv}
-{@const d = byInverter[inv.name]}
+<!-- Daten-Karte -->
+{#if selInv}
+{@const d = byInverter[selInv.name]}
 {@const latest = d?.latest ?? null}
 {@const consumptionToday = d?.consumptionToday ?? null}
 {@const online = isOnline(latest?.ts)}
 
 <div class="card shadow-sm mb-4">
   <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
-    <span>
-      <i class="bi bi-plug-fill me-2" style="color:{inv.color}"></i>{inv.name}
-    </span>
+    <span><i class="bi bi-plug-fill me-2" style="color:{selInv.color}"></i>{selInv.name}</span>
     {#if isToday}
       <span class="badge {online ? 'bg-success' : latest ? 'bg-warning text-dark' : 'bg-secondary'}">
         {online ? 'Online' : latest ? 'Offline' : 'Keine Daten'}
       </span>
     {/if}
   </div>
-
   <div class="card-body">
 
     {#if isToday && latest}
-    <!-- Live-Werte nur für heute -->
     <div class="text-center mb-4">
       <div class="display-4 fw-bold text-danger">{fmt(latest.total_act_power, 0)} <small class="fs-4 text-muted">W</small></div>
       <div class="text-muted small">Live · {timeAgo(latest.ts)}</div>
@@ -309,15 +294,17 @@
 
     {#if d?.history?.length > 0}
     <div style="min-height:240px">
-      <canvas bind:this={canvases[inv.name]} style="max-height:240px"></canvas>
+      <canvas bind:this={canvas} style="max-height:260px"></canvas>
     </div>
     {:else}
-    <div class="text-muted small text-center py-3"><i class="bi bi-info-circle me-1"></i>Keine Daten für diesen Tag</div>
+    <div class="text-muted small text-center py-3">
+      <i class="bi bi-info-circle me-1"></i>Keine Daten für diesen Tag
+    </div>
     {/if}
 
   </div>
 </div>
-{/each}
+{/if}
 
 {/if}
 

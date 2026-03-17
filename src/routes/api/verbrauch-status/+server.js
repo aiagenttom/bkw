@@ -10,7 +10,7 @@ function dayUtcRange(localDate, tzHours) {
   return { startUtc: fmt(startD), endUtc: fmt(endD) };
 }
 
-export function GET() {
+export function GET({ url }) {
   const today   = getLocalToday();
   const tzHours = getTzOffset(today);
   const syncMin = parseInt(
@@ -18,12 +18,17 @@ export function GET() {
   );
   const { startUtc, endUtc } = dayUtcRange(today, tzHours);
 
+  const invParam = url.searchParams.get('inv');
+
   const shellInverters = db.prepare(
     "SELECT id, name, color, shelly_url, shelly_feedin_phase FROM inverters WHERE enabled=1 AND shelly_url IS NOT NULL AND shelly_url != '' ORDER BY name"
   ).all();
 
+  // Nur den angefragten Inverter laden (Performance)
+  const toLoad = invParam ? shellInverters.filter(i => i.name === invParam) : shellInverters;
+
   const byInverter = {};
-  for (const inv of shellInverters) {
+  for (const inv of toLoad) {
     const fp = inv.shelly_feedin_phase ?? 'b';
 
     const latest = db.prepare(`

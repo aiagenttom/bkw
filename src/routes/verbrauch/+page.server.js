@@ -20,6 +20,40 @@ function utcToLocalDate(utcStr, tzHours) {
   return d.toISOString().substring(0, 10);
 }
 
+/** Build a price-per-15min array aligned with the given history rows + compute day cost in EUR. */
+function buildPrices(history, inv, startUtc, endUtc, syncMin) {
+  const globalMode  = getSetting('price_mode') || 'fixed';
+  const globalFixed = parseFloat(getSetting('fixed_price_ct') ?? '30');
+  const netzCt      = parseFloat(getSetting('netzgebuehr_ct')  ?? '0');
+  const mwstPct     = parseFloat(getSetting('mwst_percent')    ?? '0');
+
+  const effectiveMode  = inv.price_mode  ?? globalMode;
+  const effectiveFixed = inv.fixed_price_ct ?? globalFixed;
+
+  let priceMap = {};
+  if (effectiveMode === 'spotty' && history.length) {
+    // spotty_prices uses ISO Z-format ts ("2026-03-17T08:00:00Z")
+    const startT = startUtc.replace(' ', 'T') + 'Z';
+    const endT   = endUtc.replace(' ', 'T')   + 'Z';
+    const rows = db.prepare(
+      'SELECT ts, price FROM spotty_prices WHERE ts >= ? AND ts < ? ORDER BY ts'
+    ).all(startT, endT);
+    for (const r of rows) priceMap[r.ts] = r.price;
+  }
+
+  let costEur = 0;
+  const prices = history.map(r => {
+    const base = effectiveMode === 'fixed' ? effectiveFixed : (priceMap[r.ts] ?? null);
+    if (base == null) return null;
+    const totalCt = (base + netzCt) * (1 + mwstPct / 100);
+    // Accumulate cost: power_W * interval_h / 1000kW * price_ct/100 → EUR
+    if (r.total_act_power > 0) costEur += r.total_act_power * (syncMin / 60) / 1000 * totalCt / 100;
+    return Math.round(totalCt * 10) / 10;
+  });
+
+  return { prices, costToday: costEur > 0 ? Math.round(costEur * 1000) / 1000 : null };
+}
+
 const t = (label, start) => {
   const ms = Date.now() - start;
   console.log(`[verbrauch] ${label}: ${ms}ms`);
@@ -35,9 +69,9 @@ export async function load({ url }) {
   const syncMin = parseInt(getSetting('sync_interval') ?? '1');
   let ts = t('init', T0);
 
-  // Alle Inverter mit Shelly (nur für Dropdown)
+  // Alle Inverter mit Shelly (für Dropdown + Preisinfos)
   const shellInverters = db.prepare(
-    "SELECT id, name, color, shelly_url, shelly_feedin_phase FROM inverters WHERE enabled=1 AND shelly_url IS NOT NULL AND shelly_url != '' ORDER BY name"
+    "SELECT id, name, color, shelly_url, shelly_feedin_phase, price_mode, fixed_price_ct FROM inverters WHERE enabled=1 AND shelly_url IS NOT NULL AND shelly_url != '' ORDER BY name"
   ).all();
   ts = t('shellInverters query', ts);
 
@@ -106,14 +140,17 @@ export async function load({ url }) {
     FROM shelly_readings
     WHERE inverter_name = ? AND created_at >= ? AND created_at < ?
   `).get(syncMin, inv.name, startUtc, endUtc)?.wh ?? null;
-  t(`consumptionToday query`, ts);
+
+  // Preise (aligned mit history) + Tageskosten
+  const { prices, costToday } = buildPrices(history, inv, startUtc, endUtc, syncMin);
+  t('prices + consumptionToday', ts);
 
   console.log(`[verbrauch] --- load DONE ${Date.now() - T0}ms total ---`);
 
   return {
     shellInverters,
     selInv: inv,
-    byInverter: { [inv.name]: { ...inv, latest, history, consumptionToday } },
+    byInverter: { [inv.name]: { ...inv, latest, history, consumptionToday, prices, costToday } },
     today, selDate, minDate,
   };
 }

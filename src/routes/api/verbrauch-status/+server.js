@@ -2,6 +2,10 @@ import { json } from '@sveltejs/kit';
 import db from '$lib/db.js';
 import { getTzOffset, getLocalToday } from '$lib/tz.js';
 
+function getSetting(key) {
+  return db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key)?.value ?? null;
+}
+
 function dayUtcRange(localDate, tzHours) {
   const startD = new Date(`${localDate}T00:00:00Z`);
   startD.setUTCHours(startD.getUTCHours() - tzHours);
@@ -10,18 +14,49 @@ function dayUtcRange(localDate, tzHours) {
   return { startUtc: fmt(startD), endUtc: fmt(endD) };
 }
 
+/** Build prices array aligned with history rows + compute day cost in EUR. */
+function buildPrices(history, inv, startUtc, endUtc, syncMin) {
+  const globalMode  = getSetting('price_mode') || 'fixed';
+  const globalFixed = parseFloat(getSetting('fixed_price_ct') ?? '30');
+  const netzCt      = parseFloat(getSetting('netzgebuehr_ct')  ?? '0');
+  const mwstPct     = parseFloat(getSetting('mwst_percent')    ?? '0');
+
+  const effectiveMode  = inv.price_mode  ?? globalMode;
+  const effectiveFixed = inv.fixed_price_ct ?? globalFixed;
+
+  let priceMap = {};
+  if (effectiveMode === 'spotty' && history.length) {
+    const startT = startUtc.replace(' ', 'T') + 'Z';
+    const endT   = endUtc.replace(' ', 'T')   + 'Z';
+    const rows = db.prepare(
+      'SELECT ts, price FROM spotty_prices WHERE ts >= ? AND ts < ? ORDER BY ts'
+    ).all(startT, endT);
+    for (const r of rows) priceMap[r.ts] = r.price;
+  }
+
+  let costEur = 0;
+  const prices = history.map(r => {
+    const base = effectiveMode === 'fixed' ? effectiveFixed : (priceMap[r.ts] ?? null);
+    if (base == null) return null;
+    const totalCt = (base + netzCt) * (1 + mwstPct / 100);
+    // Accumulate cost: power_W * interval_h * price_ct/kWh / 100 → EUR
+    if (r.total_act_power > 0) costEur += r.total_act_power * (syncMin / 60) / 1000 * totalCt / 100;
+    return Math.round(totalCt * 10) / 10;
+  });
+
+  return { prices, costToday: costEur > 0 ? Math.round(costEur * 1000) / 1000 : null };
+}
+
 export function GET({ url }) {
   const today   = getLocalToday();
   const tzHours = getTzOffset(today);
-  const syncMin = parseInt(
-    db.prepare("SELECT value FROM app_settings WHERE key = 'sync_interval'").get()?.value ?? '1'
-  );
+  const syncMin = parseInt(getSetting('sync_interval') ?? '1');
   const { startUtc, endUtc } = dayUtcRange(today, tzHours);
 
   const invParam = url.searchParams.get('inv');
 
   const shellInverters = db.prepare(
-    "SELECT id, name, color, shelly_url, shelly_feedin_phase FROM inverters WHERE enabled=1 AND shelly_url IS NOT NULL AND shelly_url != '' ORDER BY name"
+    "SELECT id, name, color, shelly_url, shelly_feedin_phase, price_mode, fixed_price_ct FROM inverters WHERE enabled=1 AND shelly_url IS NOT NULL AND shelly_url != '' ORDER BY name"
   ).all();
 
   // Nur den angefragten Inverter laden (Performance)
@@ -65,7 +100,9 @@ export function GET({ url }) {
       WHERE inverter_name = ? AND created_at >= ? AND created_at < ?
     `).get(syncMin, inv.name, startUtc, endUtc)?.wh ?? null;
 
-    byInverter[inv.name] = { ...inv, latest, history, consumptionToday };
+    const { prices, costToday } = buildPrices(history, inv, startUtc, endUtc, syncMin);
+
+    byInverter[inv.name] = { ...inv, latest, history, consumptionToday, prices, costToday };
   }
 
   return json({ success: true, shellInverters, byInverter });

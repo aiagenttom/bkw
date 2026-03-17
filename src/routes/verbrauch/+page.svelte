@@ -63,12 +63,15 @@
   }
 
   function buildChart() {
-    const history = selInv ? (byInverter[selInv.name]?.history ?? []) : [];
+    const invData = selInv ? byInverter[selInv.name] : null;
+    const history = invData?.history ?? [];
+    const prices  = invData?.prices  ?? [];
     if (!canvas || !browser || !ChartCls || !history.length) return;
     if (chart) { chart.destroy(); chart = null; }
 
     const labels        = makeLabels(history);
     const tooltipLabels = makeTooltipLabels(history);
+    const hasPrices     = prices.some(p => p != null);
 
     chart = new ChartCls(canvas, {
       type: 'line',
@@ -77,16 +80,24 @@
         datasets: [
           { label: 'Gesamt (W)', data: history.map(r => r.total_act_power),
             borderColor: '#e74c3c', backgroundColor: 'rgba(231,76,60,0.08)',
-            fill: true, tension: 0, pointRadius: 0, borderWidth: 2 },
+            fill: true, tension: 0, pointRadius: 0, borderWidth: 2,
+            yAxisID: 'y' },
           { label: 'L1 (W)', data: history.map(r => r.a_act_power),
             borderColor: '#3498db', backgroundColor: 'transparent',
-            tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2] },
+            tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2],
+            yAxisID: 'y' },
           { label: 'L2 (W)', data: history.map(r => r.b_act_power),
             borderColor: '#2ecc71', backgroundColor: 'transparent',
-            tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2] },
+            tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2],
+            yAxisID: 'y' },
           { label: 'L3 (W)', data: history.map(r => r.c_act_power),
             borderColor: '#f39c12', backgroundColor: 'transparent',
-            tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2] },
+            tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2],
+            yAxisID: 'y' },
+          { label: 'Preis (ct/kWh)', data: prices,
+            borderColor: '#9b59b6', backgroundColor: 'transparent',
+            tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [6,3],
+            yAxisID: 'y2' },
         ],
       },
       options: {
@@ -99,7 +110,11 @@
           tooltip: {
             callbacks: {
               title: items => tooltipLabels[items[0]?.dataIndex] ?? '',
-              label: ctx => ctx.raw != null ? `${ctx.dataset.label}: ${ctx.raw.toFixed(0)} W` : '',
+              label: ctx => {
+                if (ctx.raw == null) return '';
+                if (ctx.dataset.yAxisID === 'y2') return `${ctx.dataset.label}: ${ctx.raw.toFixed(1)} ct`;
+                return `${ctx.dataset.label}: ${ctx.raw.toFixed(0)} W`;
+              },
             },
           },
         },
@@ -108,6 +123,13 @@
           y: { beginAtZero: true,
                title: { display: true, text: 'Leistung (W)', font: { size: 11 } },
                grid: { color: 'rgba(0,0,0,0.05)' } },
+          y2: { position: 'right',
+                display: hasPrices,
+                beginAtZero: false,
+                title: { display: true, text: 'Preis (ct/kWh)', font: { size: 11 }, color: '#9b59b6' },
+                grid: { drawOnChartArea: false },
+                ticks: { font: { size: 10 }, color: '#9b59b6',
+                         callback: v => v != null ? v.toFixed(1) + ' ct' : '' } },
         },
       },
     });
@@ -126,6 +148,7 @@
           lastUpdated = new Date();
           // Chart updaten statt neu bauen
           const history = j.byInverter[inv].history ?? [];
+          const prices  = j.byInverter[inv].prices  ?? [];
           if (chart && history.length) {
             chart.data.labels = makeLabels(history);
             const tl = makeTooltipLabels(history);
@@ -133,6 +156,8 @@
             chart.data.datasets[1].data = history.map(r => r.a_act_power);
             chart.data.datasets[2].data = history.map(r => r.b_act_power);
             chart.data.datasets[3].data = history.map(r => r.c_act_power);
+            chart.data.datasets[4].data = prices;
+            chart.options.scales.y2.display = prices.some(p => p != null);
             chart.options.plugins.tooltip.callbacks.title = items => tl[items[0]?.dataIndex] ?? '';
             chart.update('none');
           } else {
@@ -238,6 +263,7 @@
 {@const d = byInverter[selInv.name]}
 {@const latest = d?.latest ?? null}
 {@const consumptionToday = d?.consumptionToday ?? null}
+{@const costToday = d?.costToday ?? null}
 {@const online = isOnline(latest?.ts)}
 
 <div class="card shadow-sm mb-4">
@@ -278,14 +304,24 @@
     </div>
     {/if}
 
-    {#if consumptionToday != null}
-    <div class="text-center mb-3">
+    <!-- Verbrauch + Kosten Badges -->
+    {#if consumptionToday != null || costToday != null}
+    <div class="d-flex justify-content-center gap-2 flex-wrap mb-3">
+      {#if consumptionToday != null}
       <span class="badge bg-secondary fs-6">
+        <i class="bi bi-lightning-fill me-1"></i>
         {consumptionToday >= 1000
           ? (consumptionToday/1000).toFixed(2) + ' kWh'
           : Math.round(consumptionToday) + ' Wh'}
         {isToday ? ' heute' : ' gesamt'}
       </span>
+      {/if}
+      {#if costToday != null}
+      <span class="badge fs-6" style="background:rgba(155,89,182,0.15);color:#7d3c98;border:1px solid rgba(155,89,182,0.4)">
+        <i class="bi bi-currency-euro me-1"></i>{costToday.toFixed(2)} €
+        {isToday ? ' bisher' : ' gesamt'}
+      </span>
+      {/if}
     </div>
     {/if}
 

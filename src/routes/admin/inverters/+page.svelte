@@ -195,7 +195,7 @@
           <small class="text-muted">Stromverbrauchsmessung für diesen Standort</small>
         </div>
         <div class="col-12 col-md-6">
-          <label class="form-label form-label-sm"><i class="bi bi-arrow-left-right me-1"></i>Einspeise-Phase (kein abs)</label>
+          <span class="form-label form-label-sm d-block"><i class="bi bi-arrow-left-right me-1"></i>Einspeise-Phase (kein abs)</span>
           <div class="btn-group btn-group-sm d-flex" role="group">
             {#each [['', 'Keine'], ['a', 'L1'], ['b', 'L2'], ['c', 'L3']] as [val, label]}
               <input type="radio" class="btn-check" name="shelly_feedin_phase"

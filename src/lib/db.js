@@ -158,16 +158,6 @@ for (const sql of [
   "ALTER TABLE inverters       ADD COLUMN shelly_feedin_phase TEXT DEFAULT 'b'",
 ]) { try { db.exec(sql); } catch {} }
 
-// Einmalige Datenkorrektur: negative L1/L3-Werte auf abs() setzen (L2 darf negativ bleiben)
-// Total wird aus korrigierten Phasenwerten neu berechnet
-db.exec(`
-  UPDATE shelly_readings SET a_act_power = ABS(a_act_power) WHERE a_act_power < 0;
-  UPDATE shelly_readings SET c_act_power = ABS(c_act_power) WHERE c_act_power < 0;
-  UPDATE shelly_readings
-    SET total_act_power = a_act_power + b_act_power + c_act_power
-    WHERE a_act_power IS NOT NULL AND b_act_power IS NOT NULL AND c_act_power IS NOT NULL;
-`);
-
 // Shelly Pro 3EM – Stromverbrauchsmessung (live readings, 1-min resolution)
 db.exec(`
   CREATE TABLE IF NOT EXISTS shelly_readings (
@@ -186,6 +176,17 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_shelly_readings_time ON shelly_readings(created_at);
   CREATE INDEX IF NOT EXISTS idx_shelly_readings_inv  ON shelly_readings(inverter_name, created_at);
 `);
+
+// Einmalige Datenkorrektur: negative L1/L3-Werte auf abs() setzen, Total neu berechnen
+try {
+  db.exec(`
+    UPDATE shelly_readings SET a_act_power = ABS(a_act_power) WHERE a_act_power < 0;
+    UPDATE shelly_readings SET c_act_power = ABS(c_act_power) WHERE c_act_power < 0;
+    UPDATE shelly_readings
+      SET total_act_power = a_act_power + b_act_power + c_act_power
+      WHERE a_act_power IS NOT NULL AND b_act_power IS NOT NULL AND c_act_power IS NOT NULL;
+  `);
+} catch {}
 
 // Anker SOLIX Powerbank live readings (raw, 5-min resolution)
 db.exec(`

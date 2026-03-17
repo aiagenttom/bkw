@@ -15,7 +15,7 @@ function dayUtcRange(localDate, tzHours) {
 }
 
 /** Build prices array aligned with history rows + compute day cost in EUR. */
-function buildPrices(history, inv, startUtc, endUtc, syncMin) {
+function buildPrices(history, inv, startUtc, endUtc) {
   const globalMode  = getSetting('price_mode') || 'fixed';
   const globalFixed = parseFloat(getSetting('fixed_price_ct') ?? '30');
   const netzCt      = parseFloat(getSetting('netzgebuehr_ct')  ?? '0');
@@ -39,8 +39,8 @@ function buildPrices(history, inv, startUtc, endUtc, syncMin) {
     const base = effectiveMode === 'fixed' ? effectiveFixed : (priceMap[r.ts] ?? null);
     if (base == null) return null;
     const totalCt = (base + netzCt) * (1 + mwstPct / 100);
-    // Accumulate cost: power_W * interval_h * price_ct/kWh / 100 → EUR
-    if (r.total_act_power > 0) costEur += r.total_act_power * (syncMin / 60) / 1000 * totalCt / 100;
+    // Accumulate cost: power_W * 0.25h (15-min bucket) / 1000kW * price_ct/100 → EUR
+    if (r.total_act_power > 0) costEur += r.total_act_power * 0.25 / 1000 * totalCt / 100;
     return Math.round(totalCt * 10) / 10;
   });
 
@@ -100,7 +100,7 @@ export function GET({ url }) {
       WHERE inverter_name = ? AND created_at >= ? AND created_at < ?
     `).get(syncMin, inv.name, startUtc, endUtc)?.wh ?? null;
 
-    const { prices, costToday } = buildPrices(history, inv, startUtc, endUtc, syncMin);
+    const { prices, costToday } = buildPrices(history, inv, startUtc, endUtc);
 
     byInverter[inv.name] = { ...inv, latest, history, consumptionToday, prices, costToday };
   }

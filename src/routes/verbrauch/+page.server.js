@@ -21,7 +21,7 @@ function utcToLocalDate(utcStr, tzHours) {
 }
 
 /** Build a price-per-15min array aligned with the given history rows + compute day cost in EUR. */
-function buildPrices(history, inv, startUtc, endUtc, syncMin) {
+function buildPrices(history, inv, startUtc, endUtc) {
   const globalMode  = getSetting('price_mode') || 'fixed';
   const globalFixed = parseFloat(getSetting('fixed_price_ct') ?? '30');
   const netzCt      = parseFloat(getSetting('netzgebuehr_ct')  ?? '0');
@@ -46,8 +46,8 @@ function buildPrices(history, inv, startUtc, endUtc, syncMin) {
     const base = effectiveMode === 'fixed' ? effectiveFixed : (priceMap[r.ts] ?? null);
     if (base == null) return null;
     const totalCt = (base + netzCt) * (1 + mwstPct / 100);
-    // Accumulate cost: power_W * interval_h / 1000kW * price_ct/100 → EUR
-    if (r.total_act_power > 0) costEur += r.total_act_power * (syncMin / 60) / 1000 * totalCt / 100;
+    // Accumulate cost: power_W * 0.25h (15-min bucket) / 1000kW * price_ct/100 → EUR
+    if (r.total_act_power > 0) costEur += r.total_act_power * 0.25 / 1000 * totalCt / 100;
     return Math.round(totalCt * 10) / 10;
   });
 
@@ -142,7 +142,7 @@ export async function load({ url }) {
   `).get(syncMin, inv.name, startUtc, endUtc)?.wh ?? null;
 
   // Preise (aligned mit history) + Tageskosten
-  const { prices, costToday } = buildPrices(history, inv, startUtc, endUtc, syncMin);
+  const { prices, costToday } = buildPrices(history, inv, startUtc, endUtc);
   t('prices + consumptionToday', ts);
 
   console.log(`[verbrauch] --- load DONE ${Date.now() - T0}ms total ---`);

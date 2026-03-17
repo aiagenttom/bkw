@@ -4,12 +4,29 @@
 
   export let data;
 
-  let shellInverters = data.shellInverters;
-  let byInverter     = data.byInverter;
+  $: ({ shellInverters, byInverter, today, selDate, minDate } = data);
+
+  // Date navigation
+  function addDays(d, n) {
+    const dt = new Date(d + 'T12:00:00');
+    dt.setDate(dt.getDate() + n);
+    return dt.toISOString().substring(0, 10);
+  }
+  $: prevDate  = addDays(selDate, -1);
+  $: nextDate  = addDays(selDate, +1);
+  $: canGoPrev = prevDate >= minDate;
+  $: canGoNext = nextDate <= today;
+  $: isToday   = selDate === today;
+
+  function dateHref(d) { return `/verbrauch?date=${d}`; }
+
+  function formatDate(d) {
+    return new Date(d + 'T12:00:00').toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
 
   let ChartClass  = null;
-  let charts      = {};   // inverter name → Chart instance
-  let canvases    = {};   // inverter name → canvas element
+  let charts      = {};
+  let canvases    = {};
   let interval;
   let lastUpdated = null;
   let loading     = false;
@@ -25,14 +42,13 @@
   }
 
   function isOnline(ts) {
-    if (!ts) return false;
-    return (Date.now() - new Date(ts).getTime()) < 5 * 60 * 1000;
+    return ts ? (Date.now() - new Date(ts).getTime()) < 5 * 60 * 1000 : false;
   }
 
   function makeLabels(rows) {
     return rows.map(r => {
       const d = new Date(r.ts);
-      return `${String(d.getDate()).padStart(2,'0')}. ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     });
   }
   function makeTooltipLabels(rows) {
@@ -50,7 +66,6 @@
 
     const labels        = makeLabels(history);
     const tooltipLabels = makeTooltipLabels(history);
-    const ptR           = history.length > 120 ? 0 : 2;
 
     charts[invName] = new ChartClass(canvas, {
       type: 'line',
@@ -60,9 +75,8 @@
           {
             label: 'Gesamt (W)',
             data: history.map(r => r.total_act_power),
-            borderColor: '#e74c3c',
-            backgroundColor: 'rgba(231,76,60,0.1)',
-            fill: true, tension: 0.3, pointRadius: ptR, borderWidth: 2,
+            borderColor: '#e74c3c', backgroundColor: 'rgba(231,76,60,0.1)',
+            fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
           },
           {
             label: 'L1 (W)',
@@ -109,6 +123,10 @@
     });
   }
 
+  function rebuildAllCharts() {
+    for (const inv of shellInverters) buildChart(inv.name);
+  }
+
   function updateChart(invName) {
     const c       = charts[invName];
     const history = byInverter[invName]?.history ?? [];
@@ -125,17 +143,31 @@
     c.update('none');
   }
 
+  // Rebuild charts when selDate changes (SvelteKit navigation)
+  $: if (browser && ChartClass && selDate) {
+    for (const c of Object.values(charts)) c?.destroy();
+    charts = {};
+    // defer to next tick so canvases are bound
+    Promise.resolve().then(rebuildAllCharts);
+  }
+
   async function refresh() {
-    if (loading) return;
+    if (!isToday || loading) return;
     loading = true;
     try {
       const resp = await fetch('/api/verbrauch-status');
       if (resp.ok) {
         const j = await resp.json();
         if (j.success) {
-          shellInverters = j.shellInverters;
-          byInverter     = j.byInverter;
-          lastUpdated    = new Date();
+          for (const inv of j.shellInverters) {
+            if (byInverter[inv.name]) {
+              byInverter[inv.name].latest           = j.byInverter[inv.name].latest;
+              byInverter[inv.name].history          = j.byInverter[inv.name].history;
+              byInverter[inv.name].consumptionToday = j.byInverter[inv.name].consumptionToday;
+            }
+          }
+          byInverter = byInverter; // trigger reactivity
+          lastUpdated = new Date();
           for (const inv of shellInverters) updateChart(inv.name);
         }
       }
@@ -147,11 +179,11 @@
     const { Chart, registerables } = await import('chart.js');
     Chart.register(...registerables);
     ChartClass = Chart;
-    for (const inv of shellInverters) buildChart(inv.name);
+    rebuildAllCharts();
     lastUpdated = new Date();
-    interval = setInterval(refresh, 30_000);
+    if (isToday) interval = setInterval(refresh, 30_000);
 
-    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    const onVisible = () => { if (document.visibilityState === 'visible' && isToday) refresh(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   });
@@ -168,16 +200,44 @@
 <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
   <div>
     <h4 class="mb-0 fw-bold"><i class="bi bi-plug-fill text-danger me-2"></i>Stromverbrauch</h4>
-    <small class="text-muted">Shelly Pro 3EM – Live Messung</small>
+    <small class="text-muted">Shelly Pro 3EM – Historische Daten</small>
   </div>
   <div class="d-flex align-items-center gap-2">
-    {#if lastUpdated}
+    {#if isToday && lastUpdated}
       <span class="badge bg-secondary">{timeAgo(lastUpdated.toISOString())}</span>
     {/if}
-    <button class="btn btn-warning btn-sm" on:click={refresh} disabled={loading}>
-      <i class="bi bi-arrow-clockwise {loading ? 'spin' : ''}"></i>
-    </button>
+    {#if isToday}
+      <button class="btn btn-warning btn-sm" on:click={refresh} disabled={loading} aria-label="Refresh">
+        <i class="bi bi-arrow-clockwise {loading ? 'spin' : ''}"></i>
+      </button>
+    {/if}
   </div>
+</div>
+
+<!-- Datumsnavigation -->
+<div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
+  {#if canGoPrev}
+    <a href={dateHref(prevDate)} class="btn btn-outline-secondary btn-sm" aria-label="Vorheriger Tag">
+      <i class="bi bi-chevron-left"></i>
+    </a>
+  {:else}
+    <button class="btn btn-outline-secondary btn-sm" disabled aria-label="Vorheriger Tag">
+      <i class="bi bi-chevron-left"></i>
+    </button>
+  {/if}
+
+  <a href={dateHref(today)} class="btn btn-sm {isToday ? 'btn-primary' : 'btn-outline-primary'}">Heute</a>
+  <span class="fw-semibold">{formatDate(selDate)}</span>
+
+  {#if canGoNext}
+    <a href={dateHref(nextDate)} class="btn btn-outline-secondary btn-sm ms-auto" aria-label="Nächster Tag">
+      <i class="bi bi-chevron-right"></i>
+    </a>
+  {:else}
+    <button class="btn btn-outline-secondary btn-sm ms-auto" disabled aria-label="Nächster Tag">
+      <i class="bi bi-chevron-right"></i>
+    </button>
+  {/if}
 </div>
 
 {#if shellInverters.length === 0}
@@ -199,73 +259,63 @@
     <span>
       <i class="bi bi-plug-fill me-2" style="color:{inv.color}"></i>{inv.name}
     </span>
-    <span class="badge {online ? 'bg-success' : latest ? 'bg-warning text-dark' : 'bg-secondary'}">
-      {online ? 'Online' : latest ? 'Offline' : 'Keine Daten'}
-    </span>
+    {#if isToday}
+      <span class="badge {online ? 'bg-success' : latest ? 'bg-warning text-dark' : 'bg-secondary'}">
+        {online ? 'Online' : latest ? 'Offline' : 'Keine Daten'}
+      </span>
+    {/if}
   </div>
 
-  {#if !latest}
-  <div class="card-body">
-    <div class="text-muted small"><i class="bi bi-info-circle me-1"></i>Noch keine Messwerte. Warte auf ersten Sync...</div>
-  </div>
-  {:else}
   <div class="card-body">
 
-    <!-- Gesamtverbrauch -->
+    {#if isToday && latest}
+    <!-- Live-Werte nur für heute -->
     <div class="text-center mb-4">
       <div class="display-4 fw-bold text-danger">{fmt(latest.total_act_power, 0)} <small class="fs-4 text-muted">W</small></div>
-      <div class="text-muted small">Gesamtverbrauch · {timeAgo(latest.ts)}</div>
-      {#if consumptionToday != null}
-        <div class="mt-1">
-          <span class="badge bg-secondary fs-6">
-            {consumptionToday >= 1000
-              ? (consumptionToday/1000).toFixed(2) + ' kWh'
-              : Math.round(consumptionToday) + ' Wh'} heute
-          </span>
-        </div>
-      {/if}
+      <div class="text-muted small">Live · {timeAgo(latest.ts)}</div>
     </div>
-
-    <!-- Phasen -->
-    <div class="row g-3 text-center mb-3">
+    <div class="row g-3 text-center mb-4">
       <div class="col-4">
-        <div class="p-3 rounded" style="background:rgba(52,152,219,0.1);border:1px solid rgba(52,152,219,0.3)">
-          <div class="fw-bold fs-5 text-primary">{fmt(latest.a_act_power, 0)} W</div>
+        <div class="p-2 rounded" style="background:rgba(52,152,219,0.1);border:1px solid rgba(52,152,219,0.3)">
+          <div class="fw-bold text-primary">{fmt(latest.a_act_power, 0)} W</div>
           <div class="text-muted small">L1</div>
-          {#if latest.a_voltage != null}
-            <div style="font-size:.7rem;color:#aaa">{fmt(latest.a_voltage, 1)} V</div>
-          {/if}
         </div>
       </div>
       <div class="col-4">
-        <div class="p-3 rounded" style="background:rgba(46,204,113,0.1);border:1px solid rgba(46,204,113,0.3)">
-          <div class="fw-bold fs-5 text-success">{fmt(latest.b_act_power, 0)} W</div>
+        <div class="p-2 rounded" style="background:rgba(46,204,113,0.1);border:1px solid rgba(46,204,113,0.3)">
+          <div class="fw-bold text-success">{fmt(latest.b_act_power, 0)} W</div>
           <div class="text-muted small">L2</div>
-          {#if latest.b_voltage != null}
-            <div style="font-size:.7rem;color:#aaa">{fmt(latest.b_voltage, 1)} V</div>
-          {/if}
         </div>
       </div>
       <div class="col-4">
-        <div class="p-3 rounded" style="background:rgba(243,156,18,0.1);border:1px solid rgba(243,156,18,0.3)">
-          <div class="fw-bold fs-5 text-warning">{fmt(latest.c_act_power, 0)} W</div>
+        <div class="p-2 rounded" style="background:rgba(243,156,18,0.1);border:1px solid rgba(243,156,18,0.3)">
+          <div class="fw-bold text-warning">{fmt(latest.c_act_power, 0)} W</div>
           <div class="text-muted small">L3</div>
-          {#if latest.c_voltage != null}
-            <div style="font-size:.7rem;color:#aaa">{fmt(latest.c_voltage, 1)} V</div>
-          {/if}
         </div>
       </div>
     </div>
+    {/if}
 
-    <!-- 24h Chart -->
+    {#if consumptionToday != null}
+    <div class="text-center mb-3">
+      <span class="badge bg-secondary fs-6">
+        {consumptionToday >= 1000
+          ? (consumptionToday/1000).toFixed(2) + ' kWh'
+          : Math.round(consumptionToday) + ' Wh'}
+        {isToday ? ' heute' : ' gesamt'}
+      </span>
+    </div>
+    {/if}
+
     {#if d?.history?.length > 0}
     <div style="min-height:240px">
       <canvas bind:this={canvases[inv.name]} style="max-height:240px"></canvas>
     </div>
+    {:else}
+    <div class="text-muted small text-center py-3"><i class="bi bi-info-circle me-1"></i>Keine Daten für diesen Tag</div>
     {/if}
 
   </div>
-  {/if}
 </div>
 {/each}
 

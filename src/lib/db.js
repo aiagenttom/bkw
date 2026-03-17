@@ -152,6 +152,10 @@ db.exec(`
 for (const sql of [
   "ALTER TABLE inverters       ADD COLUMN shelly_url   TEXT",
   "ALTER TABLE shelly_readings ADD COLUMN inverter_name TEXT",
+  "ALTER TABLE inverters       ADD COLUMN shelly_l1_abs       INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE inverters       ADD COLUMN shelly_l2_abs       INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE inverters       ADD COLUMN shelly_l3_abs       INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE inverters       ADD COLUMN shelly_feedin_phase TEXT DEFAULT 'b'",
 ]) { try { db.exec(sql); } catch {} }
 
 // Shelly Pro 3EM – Stromverbrauchsmessung (live readings, 1-min resolution)

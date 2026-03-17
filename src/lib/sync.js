@@ -454,14 +454,17 @@ export async function syncAnker() {
  */
 export async function syncShelly() {
   const inverters = db.prepare(
-    "SELECT name, shelly_url FROM inverters WHERE enabled=1 AND shelly_url IS NOT NULL AND shelly_url != ''"
+    "SELECT name, shelly_url, shelly_feedin_phase FROM inverters WHERE enabled=1 AND shelly_url IS NOT NULL AND shelly_url != ''"
   ).all();
   if (!inverters.length) return;
 
-  await Promise.allSettled(inverters.map(inv => syncShellyOne(inv.name, inv.shelly_url)));
+  await Promise.allSettled(inverters.map(inv =>
+    syncShellyOne(inv.name, inv.shelly_url, inv.shelly_feedin_phase ?? 'b')
+  ));
 }
 
-async function syncShellyOne(inverterName, url) {
+// feedinPhase: 'a'=L1, 'b'=L2, 'c'=L3, ''=keine → alle anderen Phasen bekommen abs()
+async function syncShellyOne(inverterName, url, feedinPhase = 'b') {
   const base = url.trim().replace(/\/$/, '');
   let emStatus = null, emData = null;
 
@@ -481,6 +484,12 @@ async function syncShellyOne(inverterName, url) {
 
   const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
+  const applyAbs = (v, phase) => v != null ? (feedinPhase === phase ? v : Math.abs(v)) : null;
+  const aW    = applyAbs(emStatus.a_act_power, 'a');
+  const bW    = applyAbs(emStatus.b_act_power, 'b');
+  const cW    = applyAbs(emStatus.c_act_power, 'c');
+  const totalW = emStatus.total_act_power ?? null;
+
   db.prepare(`
     INSERT INTO shelly_readings
       (inverter_name, created_at, total_act_power, a_act_power, b_act_power, c_act_power,
@@ -489,14 +498,14 @@ async function syncShellyOne(inverterName, url) {
   `).run(
     inverterName,
     now,
-    emStatus.total_act_power ?? null,
-    emStatus.a_act_power     ?? null,
-    emStatus.b_act_power     ?? null,
-    emStatus.c_act_power     ?? null,
-    emStatus.a_voltage       ?? null,
-    emStatus.b_voltage       ?? null,
-    emStatus.c_voltage       ?? null,
-    emData?.total_act        ?? null,
+    totalW,
+    aW,
+    bW,
+    cW,
+    emStatus.a_voltage ?? null,
+    emStatus.b_voltage ?? null,
+    emStatus.c_voltage ?? null,
+    emData?.total_act  ?? null,
   );
 
   // Keep last 1440 readings per inverter (24h × 1min)

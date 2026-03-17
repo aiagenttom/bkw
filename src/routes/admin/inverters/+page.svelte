@@ -194,6 +194,18 @@
                  value={inv.shelly_url || ''} />
           <small class="text-muted">Stromverbrauchsmessung für diesen Standort</small>
         </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label form-label-sm"><i class="bi bi-arrow-left-right me-1"></i>Einspeise-Phase (kein abs)</label>
+          <div class="btn-group btn-group-sm d-flex" role="group">
+            {#each [['', 'Keine'], ['a', 'L1'], ['b', 'L2'], ['c', 'L3']] as [val, label]}
+              <input type="radio" class="btn-check" name="shelly_feedin_phase"
+                     id="fp-{val || 'none'}-{inv.id}" value={val}
+                     checked={(inv.shelly_feedin_phase ?? 'b') === val} />
+              <label class="btn btn-outline-secondary" for="fp-{val || 'none'}-{inv.id}">{label}</label>
+            {/each}
+          </div>
+          <small class="text-muted">Diese Phase darf negativ sein (Einspeisung), alle anderen bekommen abs()</small>
+        </div>
       </div>
 
       <!-- Per-inverter tariff -->

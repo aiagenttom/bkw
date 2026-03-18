@@ -452,6 +452,8 @@ export async function syncAnker() {
  *   GET /rpc/EM.GetStatus?id=0    → live power per phase
  *   GET /rpc/EMData.GetStatus?id=0 → cumulative energy (Wh)
  */
+let lastShellyCompaction = 0;
+
 export async function syncShelly() {
   const inverters = db.prepare(
     "SELECT name, shelly_url, shelly_feedin_phase FROM inverters WHERE enabled=1 AND shelly_url IS NOT NULL AND shelly_url != ''"
@@ -461,6 +463,12 @@ export async function syncShelly() {
   await Promise.allSettled(inverters.map(inv =>
     syncShellyOne(inv.name, inv.shelly_url, inv.shelly_feedin_phase ?? 'b')
   ));
+
+  // Compact old readings to hourly averages (run once per hour)
+  if (Date.now() - lastShellyCompaction > 3_600_000) {
+    compactShellyReadings();
+    lastShellyCompaction = Date.now();
+  }
 }
 
 // feedinPhase: 'a'=L1, 'b'=L2, 'c'=L3, ''=keine → alle anderen Phasen bekommen abs()
@@ -509,17 +517,69 @@ async function syncShellyOne(inverterName, url, feedinPhase = 'b') {
     emData?.total_act  ?? null,
   );
 
-  // Keep last 1440 readings per inverter (24h × 1min)
+  // Keep 2 years of readings per inverter (time-based retention)
   db.prepare(`
     DELETE FROM shelly_readings
-    WHERE inverter_name = ? AND id NOT IN (
-      SELECT id FROM shelly_readings
-      WHERE inverter_name = ?
-      ORDER BY created_at DESC LIMIT 1440
-    )
-  `).run(inverterName, inverterName);
+    WHERE inverter_name = ? AND created_at < datetime('now', '-2 years')
+  `).run(inverterName);
 
   console.log(`[shelly:${inverterName}] ${emStatus.total_act_power ?? '?'} W (L1:${emStatus.a_act_power ?? '?'} L2:${emStatus.b_act_power ?? '?'} L3:${emStatus.c_act_power ?? '?'})`);
+}
+
+/**
+ * Verdichtet Shelly-Readings älter als 7 Tage auf Stundenebene.
+ * Pro Stunde bleibt ein einzelner Datensatz mit Durchschnittswerten.
+ * Verarbeitet max. 500 Stunden pro Aufruf um die DB nicht zu blockieren.
+ */
+function compactShellyReadings() {
+  const findHours = db.prepare(`
+    SELECT inverter_name, strftime('%Y-%m-%d %H', created_at) AS hk
+    FROM shelly_readings
+    WHERE created_at < datetime('now', '-7 days')
+    GROUP BY inverter_name, strftime('%Y-%m-%d %H', created_at)
+    HAVING COUNT(*) > 1
+    LIMIT 500
+  `);
+
+  const getAvg = db.prepare(`
+    SELECT ROUND(AVG(total_act_power), 1) AS total_act_power,
+           ROUND(AVG(a_act_power), 1) AS a_act_power,
+           ROUND(AVG(b_act_power), 1) AS b_act_power,
+           ROUND(AVG(c_act_power), 1) AS c_act_power,
+           ROUND(AVG(a_voltage), 1) AS a_voltage,
+           ROUND(AVG(b_voltage), 1) AS b_voltage,
+           ROUND(AVG(c_voltage), 1) AS c_voltage,
+           MAX(total_energy_wh) AS total_energy_wh
+    FROM shelly_readings
+    WHERE inverter_name = ? AND strftime('%Y-%m-%d %H', created_at) = ?
+  `);
+
+  const delHour = db.prepare(`
+    DELETE FROM shelly_readings
+    WHERE inverter_name = ? AND strftime('%Y-%m-%d %H', created_at) = ?
+  `);
+
+  const insAvg = db.prepare(`
+    INSERT INTO shelly_readings
+      (inverter_name, created_at, total_act_power, a_act_power, b_act_power, c_act_power,
+       a_voltage, b_voltage, c_voltage, total_energy_wh)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const hours = findHours.all();
+  if (!hours.length) return;
+
+  db.transaction(() => {
+    for (const { inverter_name, hk } of hours) {
+      const avg = getAvg.get(inverter_name, hk);
+      delHour.run(inverter_name, hk);
+      insAvg.run(inverter_name, hk + ':00:00',
+        avg.total_act_power, avg.a_act_power, avg.b_act_power, avg.c_act_power,
+        avg.a_voltage, avg.b_voltage, avg.c_voltage, avg.total_energy_wh);
+    }
+  })();
+
+  console.log(`[shelly] compacted ${hours.length} hours of old readings to hourly averages`);
 }
 
 /**

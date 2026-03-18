@@ -65,7 +65,6 @@ export async function load({ url }) {
   console.log('[verbrauch] --- load START ---');
 
   const today   = getLocalToday();
-  const tzHours = getTzOffset(today);
   const syncMin = parseInt(getSetting('sync_interval') ?? '1');
   let ts = t('init', T0);
 
@@ -85,6 +84,9 @@ export async function load({ url }) {
 
   let selDate = url.searchParams.get('date') ?? today;
   if (selDate > today) selDate = today;
+
+  // DST-aware: Offset für das gewählte Datum berechnen, nicht für heute
+  const tzHours = getTzOffset(selDate);
 
   let minDate;
   if (selDate < today) {

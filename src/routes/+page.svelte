@@ -12,6 +12,7 @@
   let ankerDischargeToday   = data.ankerDischargeToday ?? {};
   let shellyLiveByInv             = data.shellyLiveByInv            ?? {};
   let shellyConsumptionTodayByInv = data.shellyConsumptionTodayByInv ?? {};
+  let weatherHourly               = data.weatherHourly              ?? null;
   let selInv    = 'all';
   let selDate   = today;
   let lastUpdate = '';
@@ -267,6 +268,57 @@
       } else {
         showPriceChart = false;
       }
+
+      // Weather chart: solar radiation + cloud cover for selected day
+      if (selDate === today && weatherHourly && weatherHourly.length) {
+        showWeatherChart = true;
+        await tick();
+        const solarHours = weatherHourly.filter(h => h.hour >= 4 && h.hour <= 22);
+        if (!charts.weather && ChartClass) {
+          charts.weather = new ChartClass(document.getElementById('cWeather'), {
+            type: 'bar',
+            data: { labels: [], datasets: [] },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              interaction: { mode: 'index', intersect: false },
+              plugins: {
+                legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+              },
+              scales: {
+                x: { ticks: { callback(v) { return this.getLabelForValue(v) + ':00'; } } },
+                y:  { beginAtZero: true, title: { display: true, text: 'W/m²', font: { size: 11 } }, position: 'left' },
+                y1: { beginAtZero: true, max: 100, title: { display: true, text: 'Bewölkung %', font: { size: 11 } }, position: 'right', grid: { drawOnChartArea: false } },
+              },
+            },
+          });
+        }
+        if (charts.weather) {
+          charts.weather.data = {
+            labels: solarHours.map(h => String(h.hour).padStart(2, '0')),
+            datasets: [
+              {
+                label: 'Globalstrahlung (W/m²)',
+                data: solarHours.map(h => h.ghi),
+                backgroundColor: 'rgba(241,196,15,0.6)',
+                borderColor: '#f1c40f', borderWidth: 1,
+                yAxisID: 'y', order: 2,
+              },
+              {
+                label: 'Bewölkung (%)',
+                data: solarHours.map(h => h.cloudCover),
+                type: 'line',
+                borderColor: '#95a5a6',
+                backgroundColor: 'rgba(149,165,166,0.2)',
+                fill: true, tension: 0.3, pointRadius: 2,
+                yAxisID: 'y1', order: 1,
+              },
+            ],
+          };
+          charts.weather.update('none');
+        }
+      } else {
+        showWeatherChart = false;
+      }
     } catch (err) {
       console.error('[dashboard] fetchData error:', err);
       lastUpdate = 'Error: ' + err.message;
@@ -274,6 +326,7 @@
   }
 
   let showPriceChart = false;
+  let showWeatherChart = false;
 
   function fmt(v, d = 1) { return v != null ? v.toFixed(d) : '–'; }
 
@@ -487,7 +540,7 @@
 
 <!-- Charts -->
 <div class="row g-3 mb-4">
-  <div class="col-12 col-xl-8">
+  <div class="col-12 col-md-6">
     <div class="card shadow-sm">
       <div class="card-header fw-semibold">
         <i class="bi bi-graph-up-arrow text-warning me-2"></i>Power Output (W DC)
@@ -497,7 +550,7 @@
       </div>
     </div>
   </div>
-  <div class="col-12 col-xl-4">
+  <div class="col-12 col-md-6">
     <div class="card shadow-sm">
       <div class="card-header fw-semibold">
         <i class="bi bi-thermometer-half text-danger me-2"></i>Temperature (°C)
@@ -523,15 +576,27 @@
   </div>
 </div>
 
-<!-- Spot price chart (hidden when no data for selected day) -->
-<div class="row g-3 mb-4" class:d-none={!showPriceChart}>
-  <div class="col-12">
+<!-- Spot price + Weather charts side by side -->
+<div class="row g-3 mb-4" class:d-none={!showPriceChart && !showWeatherChart}>
+  {#if showPriceChart}
+  <div class="col-12 {showWeatherChart ? 'col-lg-6' : ''}">
     <div class="card shadow-sm">
       <div class="card-header fw-semibold">
         <i class="bi bi-graph-up text-warning me-2"></i>Spotpreis – stündlicher Ø (inkl. Netzgeb. + MwSt)
         <span class="badge bg-warning text-dark ms-2" style="font-size:.7rem">ct/kWh</span>
       </div>
-      <div class="card-body"><canvas id="cPrice" style="max-height:200px"></canvas></div>
+      <div class="card-body"><canvas id="cPrice" style="max-height:220px"></canvas></div>
     </div>
   </div>
+  {/if}
+  {#if showWeatherChart}
+  <div class="col-12 {showPriceChart ? 'col-lg-6' : ''}">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-sun me-2 text-warning"></i>Solarstrahlung & Bewölkung (heute)
+      </div>
+      <div class="card-body"><canvas id="cWeather" style="max-height:220px"></canvas></div>
+    </div>
+  </div>
+  {/if}
 </div>

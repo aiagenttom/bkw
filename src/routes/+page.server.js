@@ -196,14 +196,7 @@ export async function load() {
     `).get(syncMin, inv.name, tzHours, today)?.wh ?? null;
   }
 
-  // ── Weather data for today (solar radiation + cloud cover) ──────────────
-  let weatherHourly = null;
-  const dbWeather = db.prepare('SELECT hour, ghi, cloud_cover FROM weather_hourly WHERE date = ? ORDER BY hour').all(today);
-  if (dbWeather.length > 0) {
-    weatherHourly = dbWeather.map(r => ({ hour: r.hour, ghi: r.ghi ?? 0, cloudCover: r.cloud_cover ?? 0 }));
-  }
-
   return { inverters, summary, liveData, settings, today, todaySavings, todaySavingsProfile,
            todaySavingsPowerbank, hasProfile, ankerChargeToday, ankerDischargeToday,
-           shellyLiveByInv, shellyConsumptionTodayByInv, weatherHourly };
+           shellyLiveByInv, shellyConsumptionTodayByInv };
 }

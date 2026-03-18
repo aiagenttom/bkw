@@ -12,7 +12,6 @@
   let ankerDischargeToday   = data.ankerDischargeToday ?? {};
   let shellyLiveByInv             = data.shellyLiveByInv            ?? {};
   let shellyConsumptionTodayByInv = data.shellyConsumptionTodayByInv ?? {};
-  let weatherHourly               = data.weatherHourly              ?? null;
   let selInv    = 'all';
   let selDate   = today;
   let lastUpdate = '';
@@ -270,10 +269,13 @@
       }
 
       // Weather chart: solar radiation + cloud cover for selected day
-      if (selDate === today && weatherHourly && weatherHourly.length) {
+      const weatherR = await fetch(`/api/weather?date=${selDate}`);
+      const weatherJ = await weatherR.json();
+      const weatherData = weatherJ.success ? weatherJ.data : [];
+      if (weatherData.length) {
         showWeatherChart = true;
         await tick();
-        const solarHours = weatherHourly.filter(h => h.hour >= 4 && h.hour <= 22);
+        const solarHours = weatherData.filter(h => h.hour >= 4 && h.hour <= 22);
         if (!charts.weather && ChartClass) {
           charts.weather = new ChartClass(document.getElementById('cWeather'), {
             type: 'bar',
@@ -593,7 +595,7 @@
   <div class="col-12 {showPriceChart ? 'col-lg-6' : ''}">
     <div class="card shadow-sm">
       <div class="card-header fw-semibold">
-        <i class="bi bi-sun me-2 text-warning"></i>Solarstrahlung & Bewölkung (heute)
+        <i class="bi bi-sun me-2 text-warning"></i>Solarstrahlung & Bewölkung
       </div>
       <div class="card-body"><canvas id="cWeather" style="max-height:220px"></canvas></div>
     </div>

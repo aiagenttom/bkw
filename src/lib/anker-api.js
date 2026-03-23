@@ -241,8 +241,10 @@ function parseDeviceStatus(scene, deviceSn = null) {
     const bat_discharge_w = num(sb.bat_discharge_power, null);
 
     let charge_w, discharge_w;
-    if (bat_charge_w !== null || bat_discharge_w !== null) {
-      // Explizite Batterie-Leistungsfelder vorhanden (SB2 / neuere Firmwares)
+    if ((bat_charge_w != null && bat_charge_w > 0) || (bat_discharge_w != null && bat_discharge_w > 0)) {
+      // Explizite Batterie-Leistungsfelder vorhanden und > 0 (SB2 / neuere Firmwares).
+      // SB1 liefert bat_charge_power:"0" / bat_discharge_power:"0" auch im Entladezustand →
+      // nur verwenden wenn mindestens ein Feld tatsächlich > 0 ist.
       charge_w    = bat_charge_w    ?? 0;
       discharge_w = bat_discharge_w ?? 0;
     } else {
@@ -253,9 +255,15 @@ function parseDeviceStatus(scene, deviceSn = null) {
         charge_w    = Math.max(0, pv_w - output_w);
         discharge_w = 0;
       } else if (cs === '2' || cs === '12') {
-        // Entladezustand: charging_power zeigt hier korrekt die Entladeleistung
+        // Entladezustand: Entladeleistung aus verfügbaren Feldern ableiten.
+        // Wichtig: || statt ??, weil charging_power oft 0 (nicht null) ist →
+        // dann muss output_power als Fallback greifen (350W Entladung wäre sonst unsichtbar).
         charge_w    = 0;
-        discharge_w = num(sb.charging_power ?? output_w, 0) ?? 0;
+        discharge_w = num(sb.charging_power, null) ||
+                      num(sb.output_power, null) ||
+                      num(sb.battery_to_output_power, null) ||
+                      num(sb.discharge_power, null) ||
+                      0;
       } else {
         // Bypass, Standby, Wakeup etc.: explizite Felder oder 0
         charge_w    = num(sb.pv_to_battery_power, 0) ?? 0;

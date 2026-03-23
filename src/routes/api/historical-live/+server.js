@@ -134,14 +134,29 @@ export function GET({ url }) {
     const mode    = inv.price_mode ?? globalMode;
     const fixedCt = inv.fixed_price_ct ?? globalFixed;
     let totalEur  = 0;
-    const hourlyData = [];
 
-    for (const h of hourlyYield) {
-      const eigenverbrauchWh = Math.min(h.avg_w, profile[h.hour] * 1000);
-      const priceCt = mode === 'spotty' ? (hourlySpot[h.hour] ?? fixedCt) : fixedCt;
-      const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
-      totalEur += eigenverbrauchWh / 1000 * totalCtPerKwh / 100;
-      hourlyData.push({ yieldWh: h.avg_w, profileWh: profile[h.hour] * 1000, priceCt });
+    // Ertrag pro Stunde (nur Tagestunden mit PV-Daten)
+    const yieldByHour = Object.fromEntries(hourlyYield.map(h => [h.hour, h.avg_w]));
+
+    // hourlyData für alle 24 Stunden: fehlende Stunden = kein PV-Ertrag (yieldWh=0).
+    // Wichtig: Batterie-Simulation braucht auch Abend-/Nachtstunden um Entladung zu rechnen.
+    const hourlyData = [];
+    for (let h = 0; h < 24; h++) {
+      const yieldWh   = yieldByHour[h] ?? 0;
+      const profileWh = (profile[h] ?? 0) * 1000;
+      const priceCt   = mode === 'spotty' ? (hourlySpot[h] ?? fixedCt) : fixedCt;
+
+      if (yieldWh > 0) {
+        // Direkter Eigenverbrauch: nur bei tatsächlichem PV-Ertrag
+        const eigenverbrauchWh = Math.min(yieldWh, profileWh);
+        const totalCtPerKwh    = (priceCt + netzCt) * (1 + mwstPct / 100);
+        totalEur += eigenverbrauchWh / 1000 * totalCtPerKwh / 100;
+      }
+
+      // Stunde ins Simulations-Array, wenn Ertrag oder Verbrauch vorhanden
+      if (yieldWh > 0 || profileWh > 0) {
+        hourlyData.push({ hour: h, yieldWh, profileWh, priceCt });
+      }
     }
 
     // Powerbank-Zusatzersparnis separat tracken

@@ -169,12 +169,18 @@
     loading = false;
   }
 
+  // Chart neu bauen wann immer die Daten oder das Datum wechseln (SvelteKit-Navigation)
+  // ChartCls ist erst nach onMount gesetzt → erste Auswertung ist immer ein No-op
+  $: if (ChartCls) {
+    byInverter; // als reaktive Abhängigkeit tracken
+    buildChart();
+  }
+
   onMount(async () => {
     if (!browser) return;
     const { Chart, registerables } = await import('chart.js');
     Chart.register(...registerables);
-    ChartCls = Chart;
-    buildChart();
+    ChartCls = Chart; // löst obigen $:-Block aus → buildChart()
     lastUpdated = new Date();
     if (isToday) interval = setInterval(refresh, 30_000);
     const onVisible = () => { if (document.visibilityState === 'visible' && isToday) refresh(); };

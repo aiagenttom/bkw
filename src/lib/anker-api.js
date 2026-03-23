@@ -193,9 +193,12 @@ function num(v, fallback = null) {
 
 function chargingState(cs) {
   const s = String(cs ?? '');
-  if (s === '1') return 'charging';
-  if (s === '2') return 'discharging';
-  if (s === '3') return 'bypass';
+  // Anker SB1 status codes (aus ha-anker-solix):
+  // 1=bypass, 2=discharge, 3=charge, 4=wakeup, 5=fully_charged, 6=full_bypass, 7=standby
+  // 12=bypass_discharge, 31=charge_bypass, 32=charge_ac, 37=charge_priority
+  if (s === '3' || s === '31' || s === '32' || s === '37') return 'charging';
+  if (s === '2' || s === '12') return 'discharging';
+  if (s === '1' || s === '6') return 'bypass';
   return 'standby';
 }
 
@@ -217,24 +220,56 @@ function parseDeviceStatus(scene, deviceSn = null) {
   const solarbanks = scene?.solarbank_info?.solarbank_list ?? [];
   for (const sb of solarbanks) {
     if (deviceSn && sb.device_sn !== deviceSn) continue;
-    // Gesamt-PV-Eingang: Summe aller Panel-Strings (solar_power_1..4)
-    // Fallback: charging_power + output_power (was ins Netz geht + was in die Batterie geht)
+
+    // Gesamt-PV-Eingang: Summe aller Panel-Strings (solar_power_1..4, für SB2)
+    // SB1 hat nur einen MPPT → pvStrings = 0 → Fallback auf solar_power / photovoltaic_power
     const pvStrings = [sb.solar_power_1, sb.solar_power_2, sb.solar_power_3, sb.solar_power_4]
       .map(v => num(v, 0)).reduce((a, b) => a + b, 0);
-    const charge_w    = num(sb.charging_power ?? sb.pv_to_battery_power ?? sb.charge_power_limit);
-    const discharge_w = num(sb.output_power   ?? sb.battery_to_output_power ?? sb.discharge_power);
     const solar_power = pvStrings > 0
       ? pvStrings
-      : num(sb.solar_power ?? sb.total_solar_power ?? sb.pv_power, null);
-    // retain_load: konfigurierte Ausgabeleistung ans Haus (z.B. "210W")
+      : num(sb.solar_power ?? sb.total_solar_power ?? sb.pv_power ?? sb.photovoltaic_power, null);
+
     const retain_load_w = parseWatt(sb.retain_load ?? sb.output_power_limit ?? null);
+    const cs = String(sb.charging_status ?? '');
+
+    // ── SB1 API-Workaround: charge_w / discharge_w korrekt ableiten ──────────
+    // Problem: Bei SB1 enthält `charging_power` im Status 3 (Laden) die Ausgangsleistung,
+    // NICHT die Ladeleistung → charge_w und discharge_w wären sonst identisch.
+    // Lösung: Vorrang für explizite bat_charge/discharge_power-Felder,
+    // danach statusabhängige Ableitung.
+    const bat_charge_w    = num(sb.bat_charge_power,   null);
+    const bat_discharge_w = num(sb.bat_discharge_power, null);
+
+    let charge_w, discharge_w;
+    if (bat_charge_w !== null || bat_discharge_w !== null) {
+      // Explizite Batterie-Leistungsfelder vorhanden (SB2 / neuere Firmwares)
+      charge_w    = bat_charge_w    ?? 0;
+      discharge_w = bat_discharge_w ?? 0;
+    } else {
+      const output_w = num(sb.output_power, 0) ?? 0;
+      const pv_w     = solar_power ?? 0;
+      if (cs === '3' || cs === '31' || cs === '32' || cs === '37') {
+        // Ladezustand: Ladeleistung = PV-Eingang minus Ausgang ans Haus
+        charge_w    = Math.max(0, pv_w - output_w);
+        discharge_w = 0;
+      } else if (cs === '2' || cs === '12') {
+        // Entladezustand: charging_power zeigt hier korrekt die Entladeleistung
+        charge_w    = 0;
+        discharge_w = num(sb.charging_power ?? output_w, 0) ?? 0;
+      } else {
+        // Bypass, Standby, Wakeup etc.: explizite Felder oder 0
+        charge_w    = num(sb.pv_to_battery_power, 0) ?? 0;
+        discharge_w = num(sb.battery_to_output_power ?? sb.discharge_power, 0) ?? 0;
+      }
+    }
+
     return {
       device_sn:   sb.device_sn ?? null,
       soc:         num(sb.battery_power ?? sb.battery_soc),
       charge_w,
       discharge_w,
       solar_power, // Gesamt-PV-Leistung der ans Anker-Gerät angeschlossenen Panels (W)
-      state:       chargingState(sb.charging_status),
+      state:       chargingState(cs),
       retain_load_w,  // Konfigurierte Abgabeleistung ans Haus (W)
       lifetime_kwh,   // Lifetime erzeugte Energie (kWh)
       lifetime_co2,   // Lifetime CO₂-Einsparung (kg)

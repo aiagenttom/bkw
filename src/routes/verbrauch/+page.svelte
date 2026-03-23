@@ -62,6 +62,13 @@
     });
   }
 
+  function phaseLabel(ph) {
+    const key = `shelly_phase_${ph}_label`;
+    const lbl = selInv?.[key]?.trim();
+    const fallback = ph === 'a' ? 'L1' : ph === 'b' ? 'L2' : 'L3';
+    return lbl ? `${fallback} – ${lbl}` : fallback;
+  }
+
   function buildChart() {
     const invData = selInv ? byInverter[selInv.name] : null;
     const history = invData?.history ?? [];
@@ -82,15 +89,15 @@
             borderColor: '#e74c3c', backgroundColor: 'rgba(231,76,60,0.08)',
             fill: true, tension: 0, pointRadius: 0, borderWidth: 2,
             yAxisID: 'y' },
-          { label: 'L1 (W)', data: history.map(r => r.a_act_power),
+          { label: `${phaseLabel('a')} (W)`, data: history.map(r => r.a_act_power),
             borderColor: '#3498db', backgroundColor: 'transparent',
             tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2],
             yAxisID: 'y' },
-          { label: 'L2 (W)', data: history.map(r => r.b_act_power),
+          { label: `${phaseLabel('b')} (W)`, data: history.map(r => r.b_act_power),
             borderColor: '#2ecc71', backgroundColor: 'transparent',
             tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2],
             yAxisID: 'y' },
-          { label: 'L3 (W)', data: history.map(r => r.c_act_power),
+          { label: `${phaseLabel('c')} (W)`, data: history.map(r => r.c_act_power),
             borderColor: '#f39c12', backgroundColor: 'transparent',
             tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [4,2],
             yAxisID: 'y' },
@@ -323,19 +330,19 @@
       <div class="col-4">
         <div class="p-2 rounded" style="background:rgba(52,152,219,0.1);border:1px solid rgba(52,152,219,0.3)">
           <div class="fw-bold text-primary">{fmt(latest.a_act_power, 0)} W</div>
-          <div class="text-muted small">L1</div>
+          <div class="text-muted small">{phaseLabel('a')}</div>
         </div>
       </div>
       <div class="col-4">
         <div class="p-2 rounded" style="background:rgba(46,204,113,0.1);border:1px solid rgba(46,204,113,0.3)">
           <div class="fw-bold text-success">{fmt(latest.b_act_power, 0)} W</div>
-          <div class="text-muted small">L2</div>
+          <div class="text-muted small">{phaseLabel('b')}</div>
         </div>
       </div>
       <div class="col-4">
         <div class="p-2 rounded" style="background:rgba(243,156,18,0.1);border:1px solid rgba(243,156,18,0.3)">
           <div class="fw-bold text-warning">{fmt(latest.c_act_power, 0)} W</div>
-          <div class="text-muted small">L3</div>
+          <div class="text-muted small">{phaseLabel('c')}</div>
         </div>
       </div>
     </div>

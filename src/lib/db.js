@@ -273,6 +273,12 @@ if (!invCols.includes('kwp'))
   db.exec('ALTER TABLE inverters ADD COLUMN kwp REAL DEFAULT 0');
 if (!invCols.includes('serial'))
   db.exec('ALTER TABLE inverters ADD COLUMN serial TEXT');
+if (!invCols.includes('shelly_phase_a_label'))
+  db.exec("ALTER TABLE inverters ADD COLUMN shelly_phase_a_label TEXT");
+if (!invCols.includes('shelly_phase_b_label'))
+  db.exec("ALTER TABLE inverters ADD COLUMN shelly_phase_b_label TEXT");
+if (!invCols.includes('shelly_phase_c_label'))
+  db.exec("ALTER TABLE inverters ADD COLUMN shelly_phase_c_label TEXT");
 
 const histCols = db.prepare('PRAGMA table_info(bkw_history)').all().map(c => c.name);
 if (!histCols.includes('dc_strings'))

@@ -208,6 +208,23 @@
         </div>
       </div>
 
+      <!-- Phasen-Labels (Zimmer) -->
+      <div class="row g-2 mb-2 align-items-end border-top pt-2 mt-1">
+        <div class="col-12">
+          <small class="text-muted fw-semibold"><i class="bi bi-tag me-1"></i>Phasen-Labels (Zimmer)</small>
+          <small class="text-muted ms-2">Welcher Raum / Bereich wird von welcher Phase versorgt?</small>
+        </div>
+        {#each [['a', 'L1'], ['b', 'L2'], ['c', 'L3']] as [ph, ln]}
+        <div class="col-4">
+          <label class="form-label form-label-sm" for="pl-{ph}-{inv.id}">{ln}</label>
+          <input id="pl-{ph}-{inv.id}" name="shelly_phase_{ph}_label"
+                 class="form-control form-control-sm"
+                 placeholder="z.B. Wohnzimmer"
+                 value={inv['shelly_phase_' + ph + '_label'] ?? ''} />
+        </div>
+        {/each}
+      </div>
+
       <!-- Per-inverter tariff -->
       <div class="row g-2 mb-2 align-items-end border-top pt-2 mt-1">
         <div class="col-12">

@@ -31,9 +31,16 @@ export const actions = {
     const fixedPriceCt = d.get('fixed_price_ct')?.toString().trim();
     const kwpVal       = d.get('kwp')?.toString().trim();
     const serial       = d.get('serial')?.toString().trim() || null;
-    const shellyUrl        = d.get('shelly_url')?.toString().trim() || null;
+    const shellyUrl         = d.get('shelly_url')?.toString().trim() || null;
     const shellyFeedinPhase = d.get('shelly_feedin_phase')?.toString() || '';
-    db.prepare('UPDATE inverters SET name=?, full_url=?, serial=?, color=?, price_mode=?, fixed_price_ct=?, kwp=?, shelly_url=?, shelly_feedin_phase=? WHERE id=?').run(
+    const shellyPhaseALabel = d.get('shelly_phase_a_label')?.toString().trim() || null;
+    const shellyPhaseBLabel = d.get('shelly_phase_b_label')?.toString().trim() || null;
+    const shellyPhaseCLabel = d.get('shelly_phase_c_label')?.toString().trim() || null;
+    db.prepare(`UPDATE inverters
+      SET name=?, full_url=?, serial=?, color=?, price_mode=?, fixed_price_ct=?, kwp=?,
+          shelly_url=?, shelly_feedin_phase=?,
+          shelly_phase_a_label=?, shelly_phase_b_label=?, shelly_phase_c_label=?
+      WHERE id=?`).run(
       name,
       d.get('full_url')?.toString().trim() || null,
       serial,
@@ -43,6 +50,9 @@ export const actions = {
       kwpVal ? parseFloat(kwpVal) : 0,
       shellyUrl,
       shellyFeedinPhase || null,
+      shellyPhaseALabel,
+      shellyPhaseBLabel,
+      shellyPhaseCLabel,
       id
     );
     return { success: `Inverter ${name} saved` };

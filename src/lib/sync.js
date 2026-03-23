@@ -604,9 +604,9 @@ export function pruneOldData() {
       (date, avg_soc, min_soc, max_soc, charge_wh, discharge_wh, readings)
     SELECT
       date(datetime(created_at, '+' || ? || ' hours'))           AS date,
-      ROUND(AVG(COALESCE(soc, 0)), 1)                            AS avg_soc,
-      ROUND(MIN(COALESCE(soc, 0)), 1)                            AS min_soc,
-      ROUND(MAX(COALESCE(soc, 0)), 1)                            AS max_soc,
+      ROUND(AVG(soc), 1)                                         AS avg_soc,
+      ROUND(MIN(soc), 1)                                         AS min_soc,
+      ROUND(MAX(soc), 1)                                         AS max_soc,
       ROUND(SUM(COALESCE(charge_w,    0)) * 5 / 60.0, 1)        AS charge_wh,
       ROUND(SUM(COALESCE(discharge_w, 0)) * 5 / 60.0, 1)        AS discharge_wh,
       COUNT(*)                                                    AS readings

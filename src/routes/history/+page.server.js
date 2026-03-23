@@ -156,7 +156,7 @@ export async function load({ url }) {
         if (!pb) continue;
 
         hourlyData.sort((a, b) => a.hour - b.hour);
-        const pbEur = simulatePowerbankSavings(hourlyData, pb.capacityWh, pb.dischargeW, netzCt, mwstPct);
+        const pbEur = simulatePowerbankSavings(hourlyData, pb.capacityWh, pb.dischargeW, netzCt, mwstPct, 0, pb.dischargeStart, pb.dischargeEnd);
         if (pbEur <= 0) continue;
 
         if (byInverter[invName]?.[day])

@@ -163,7 +163,7 @@ export function GET({ url }) {
     const pb = powerbanks.get(inv.id);
     let pbEur = 0;
     if (pb) {
-      pbEur     = simulatePowerbankSavings(hourlyData, pb.capacityWh, pb.dischargeW, netzCt, mwstPct);
+      pbEur     = simulatePowerbankSavings(hourlyData, pb.capacityWh, pb.dischargeW, netzCt, mwstPct, 0, pb.dischargeStart, pb.dischargeEnd);
       totalEur += pbEur;
     }
 

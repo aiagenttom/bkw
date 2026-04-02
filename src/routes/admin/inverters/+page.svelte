@@ -115,6 +115,75 @@
         </div>
       </div>
 
+      <hr class="my-3" />
+
+      <!-- Netzgebühr-Zeitrabatt -->
+      <div class="fw-semibold small mb-2"><i class="bi bi-clock me-1"></i>Netzgebühr-Zeitrabatt</div>
+      <div class="row g-3 align-items-end">
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold small" for="netz-disc-start">Von</label>
+          <input id="netz-disc-start" name="netz_discount_start" type="time" class="form-control form-control-sm"
+                 value={settings.netz_discount_start || ''} />
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold small" for="netz-disc-end">Bis</label>
+          <input id="netz-disc-end" name="netz_discount_end" type="time" class="form-control form-control-sm"
+                 value={settings.netz_discount_end || ''} />
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold small" for="netz-disc-pct">Rabatt</label>
+          <div class="input-group input-group-sm">
+            <input id="netz-disc-pct" name="netz_discount_pct" type="number" min="0" max="100" step="0.1"
+                   class="form-control form-control-sm" value={settings.netz_discount_pct || '0'} />
+            <span class="input-group-text">%</span>
+          </div>
+        </div>
+        <div class="col-12 col-md-6">
+          <small class="text-muted">
+            Leer lassen = kein Zeitrabatt. Beispiel: Von 10:00 bis 16:00 mit −20 % reduziert die Netzgebühr
+            in diesem Fenster auf {Math.round((parseFloat(settings.netzgebuehr_ct || 0)) * (1 - (parseFloat(settings.netz_discount_pct || 0)) / 100) * 100) / 100} ct/kWh.
+          </small>
+        </div>
+      </div>
+
+      <hr class="my-3" />
+
+      <!-- Stromrabatt -->
+      <div class="fw-semibold small mb-2"><i class="bi bi-lightning-charge me-1"></i>Stromrabatt</div>
+      <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-3">
+          <div class="form-check form-switch mt-1">
+            <input class="form-check-input" type="checkbox" id="stromrabatt-active" name="stromrabatt_active"
+                   value="1" checked={settings.stromrabatt_active === '1'} />
+            <label class="form-check-label fw-semibold small" for="stromrabatt-active">Stromrabatt aktiv</label>
+          </div>
+          <small class="text-muted d-block">Börsentarif wird auf einen Maximalpreis gedeckelt.</small>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold small" for="stromrabatt-max">Maximalpreis</label>
+          <div class="input-group input-group-sm">
+            <input id="stromrabatt-max" name="stromrabatt_max_ct" type="number" min="0" step="0.1"
+                   class="form-control form-control-sm" value={settings.stromrabatt_max_ct || '6'} />
+            <span class="input-group-text">ct/kWh</span>
+          </div>
+          <small class="text-muted">Deckel statt Börsentarif</small>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold small" for="stromrabatt-limit">Jahresgrenze</label>
+          <div class="input-group input-group-sm">
+            <input id="stromrabatt-limit" name="stromrabatt_limit_kwh" type="number" min="0" step="1"
+                   class="form-control form-control-sm" value={settings.stromrabatt_limit_kwh || '2900'} />
+            <span class="input-group-text">kWh</span>
+          </div>
+        </div>
+        <div class="col-12 col-md-5">
+          <small class="text-muted">
+            Verbrauch wird ab 1. April des Jahres gezählt (Smartmeter-Daten bevorzugt, sonst Shelly).
+            Über der Grenze gilt wieder der normale Börsentarif.
+          </small>
+        </div>
+      </div>
+
       <button class="btn btn-primary btn-sm mt-3">
         <i class="bi bi-save me-1"></i>Save Settings
       </button>

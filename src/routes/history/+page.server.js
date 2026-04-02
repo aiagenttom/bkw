@@ -1,6 +1,7 @@
 import db from '$lib/db.js';
 import { getTzOffset } from '$lib/tz.js';
 import { simulatePowerbankSavings, loadPowerbanks } from '$lib/powerbank.js';
+import { getEffectiveNetzCt, applyStromrabatt, getCumulativeKwhByDate } from '$lib/tarifutils.js';
 
 export async function load({ url }) {
   // How many months back to show (default: 3)
@@ -27,6 +28,10 @@ export async function load({ url }) {
   const globalMode  = settings.price_mode ?? 'fixed';
   const globalFixed = parseFloat(settings.fixed_price_ct ?? '30');
 
+  // Build per-date cumulative kWh map for Stromrabatt calculation
+  const dateSet0 = [...new Set(rows.map(r => r.date))].sort();
+  const cumulByDate = getCumulativeKwhByDate(dateSet0);
+
   // Per-inverter fixed price lookup
   const invSettings = {};
   for (const inv of inverters) {
@@ -38,7 +43,8 @@ export async function load({ url }) {
     const mode    = invSettings[r.inverter]?.price_mode ?? globalMode;
     const fixedCt = invSettings[r.inverter]?.fixed_price_ct ?? globalFixed;
     const priceCt = (mode === 'spotty' && r.avg_price_ct != null) ? r.avg_price_ct : fixedCt;
-    const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
+    const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulByDate[r.date] ?? 0);
+    const totalCtPerKwh = (effectivePriceCt + netzCt) * (1 + mwstPct / 100);
     r.savings_eur = r.yield_wh != null
       ? parseFloat((r.yield_wh / 1000 * totalCtPerKwh / 100).toFixed(4))
       : null;
@@ -130,7 +136,9 @@ export async function load({ url }) {
         const fixedCt  = inv?.fixed_price_ct ?? globalFixed;
         const priceCt  = (mode === 'spotty' && dailyRow?.avg_price_ct != null)
           ? dailyRow.avg_price_ct : fixedCt;
-        const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
+        const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulByDate[h.day] ?? 0);
+        const effectiveNetzCt  = getEffectiveNetzCt(h.hour, settings);
+        const totalCtPerKwh = (effectivePriceCt + effectiveNetzCt) * (1 + mwstPct / 100);
         const eur = eigenWh / 1000 * totalCtPerKwh / 100;
 
         if (byInverter[h.inverter]?.[h.day]) {

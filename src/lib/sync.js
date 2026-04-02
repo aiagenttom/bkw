@@ -4,6 +4,7 @@ import { homedir } from 'os';
 import db from './db.js';
 import { getTzOffset, getLocalToday, getTimezone } from './tz.js';
 import { getAnkerApi } from './anker-api.js';
+import { applyStromrabatt, getCumulativeKwhFromApril } from './tarifutils.js';
 
 function getSetting(key) {
   return db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key)?.value ?? null;
@@ -260,6 +261,10 @@ export function syncDaily(date) {
   const globalFixedCt = parseFloat(getSetting('fixed_price_ct') || '30');
   const mwstPct       = parseFloat(getSetting('mwst_percent') || '0');
   const netzCt        = parseFloat(getSetting('netzgebuehr_ct') || '0');
+  const allSettings   = Object.fromEntries(
+    db.prepare('SELECT key, value FROM app_settings').all().map(r => [r.key, r.value])
+  );
+  const cumulKwh = getCumulativeKwhFromApril(target, tzOffset);
 
   // Load per-inverter settings: { name → { price_mode, fixed_price_ct } }
   const invSettings = Object.fromEntries(
@@ -309,7 +314,8 @@ export function syncDaily(date) {
     } else {
       r.avg_price_ct = spottyAvgMap[r.inverter] ?? null;
     }
-    const totalCtPerKwh = r.avg_price_ct != null ? (r.avg_price_ct + netzCt) * (1 + mwstPct / 100) : null;
+    const effectivePriceCt = r.avg_price_ct != null ? applyStromrabatt(r.avg_price_ct, allSettings, cumulKwh) : null;
+    const totalCtPerKwh = effectivePriceCt != null ? (effectivePriceCt + netzCt) * (1 + mwstPct / 100) : null;
     r.savings_eur = totalCtPerKwh != null && r.yield_wh != null
       ? parseFloat((r.yield_wh / 1000 * totalCtPerKwh / 100).toFixed(4))
       : null;

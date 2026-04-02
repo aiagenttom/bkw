@@ -15,8 +15,9 @@ export const actions = {
   saveSettings: async ({ request }) => {
     const d = await request.formData();
     const upd = db.prepare('UPDATE app_settings SET value = ? WHERE key = ?');
-    for (const key of ['sync_interval', 'auto_refresh_s', 'spotty_url', 'timezone', 'price_mode', 'fixed_price_ct', 'mwst_percent', 'netzgebuehr_ct', 'shelly_url']) {
-      const v = d.get(key);
+    const checkboxKeys = new Set(['stromrabatt_active']);
+    for (const key of ['sync_interval', 'auto_refresh_s', 'spotty_url', 'timezone', 'price_mode', 'fixed_price_ct', 'mwst_percent', 'netzgebuehr_ct', 'netz_discount_start', 'netz_discount_end', 'netz_discount_pct', 'stromrabatt_active', 'stromrabatt_max_ct', 'stromrabatt_limit_kwh', 'shelly_url']) {
+      const v = checkboxKeys.has(key) ? (d.has(key) ? '1' : '0') : d.get(key);
       if (v !== null) upd.run(v.toString().trim(), key);
     }
     return { success: 'Settings saved' };

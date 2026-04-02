@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy, tick } from 'svelte';
+  import Sankey from '$lib/Sankey.svelte';
   export let data;
 
   const { inverters, summary, settings, today } = data;
@@ -228,10 +229,25 @@
         showPriceChart = true;
         await tick(); // ensure cPrice canvas is visible before Chart.js init
 
-        // Apply MwSt + Netzgebühr to spot prices
-        const mwstPct = parseFloat(settings.mwst_percent ?? '0');
-        const netzCt  = parseFloat(settings.netzgebuehr_ct ?? '0');
-        const applyTaxes = (ct) => parseFloat(((ct + netzCt) * (1 + mwstPct / 100)).toFixed(3));
+        // Apply MwSt + Netzgebühr (incl. time discount) + Stromrabatt to spot prices
+        const mwstPct         = parseFloat(settings.mwst_percent   ?? '0');
+        const netzCt          = parseFloat(settings.netzgebuehr_ct  ?? '0');
+        const discStart       = parseInt((settings.netz_discount_start || '').split(':')[0], 10);
+        const discEnd         = parseInt((settings.netz_discount_end   || '').split(':')[0], 10);
+        const discPct         = parseFloat(settings.netz_discount_pct ?? '0');
+        const stromrabattOn   = settings.stromrabatt_active === '1';
+        const stromrabattMax  = parseFloat(settings.stromrabatt_max_ct ?? '6');
+        const stromrabattLim  = parseFloat(settings.stromrabatt_limit_kwh ?? '2900');
+        const cumulKwh        = data.cumulKwhFromApril ?? 0;
+
+        const applyTaxes = (ct, hour) => {
+          let effectiveCt   = stromrabattOn && cumulKwh < stromrabattLim ? Math.min(ct, stromrabattMax) : ct;
+          let effectiveNetz = netzCt;
+          if (!isNaN(discStart) && discPct > 0 && hour >= discStart && hour < discEnd) {
+            effectiveNetz = parseFloat((netzCt * (1 - discPct / 100)).toFixed(4));
+          }
+          return parseFloat(((effectiveCt + effectiveNetz) * (1 + mwstPct / 100)).toFixed(3));
+        };
 
         if (!charts.price && ChartClass) {
           const priceOpts = {
@@ -256,7 +272,7 @@
             labels: priceLabels,
             datasets: [{
               label: `Ø Spotpreis inkl. Netzgeb. + ${mwstPct}% MwSt (ct/kWh)`,
-              data: priceData.map(r => applyTaxes(r.avg_price)),
+              data: priceData.map(r => applyTaxes(r.avg_price, r.hour)),
               borderColor: '#f39c12',
               backgroundColor: 'rgba(243,156,18,0.1)',
               borderWidth: 2, pointRadius: 3, tension: 0.3, fill: true,
@@ -329,6 +345,12 @@
 
   let showPriceChart = false;
   let showWeatherChart = false;
+
+  // ── Sankey aggregates (recomputed whenever live data refreshes) ──────────
+  $: sankeyPvWh           = inverters.reduce((s, inv) => s + (liveData[inv.name]?.yield_day ?? 0), 0);
+  $: sankeyBattChargeWh   = Object.values(ankerChargeToday).reduce((s, v) => s + (v ?? 0), 0);
+  $: sankeyBattDischargeWh = Object.values(ankerDischargeToday).reduce((s, v) => s + (v ?? 0), 0);
+  $: sankeyConsumptionWh  = Object.values(shellyConsumptionTodayByInv).reduce((s, v) => s + (v ?? 0), 0);
 
   function fmt(v, d = 1) { return v != null ? v.toFixed(d) : '–'; }
 
@@ -539,6 +561,24 @@
   </div>
   {/each}
 </div>
+
+<!-- Energiefluss Sankey -->
+{#if sankeyPvWh > 0}
+<div class="card shadow-sm mb-4">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-diagram-3-fill text-warning me-2"></i>Energiefluss
+    <span class="text-muted fw-normal" style="font-size:.8rem"> — {selDate}</span>
+  </div>
+  <div class="card-body">
+    <Sankey
+      pvWh={sankeyPvWh}
+      battChargeWh={sankeyBattChargeWh}
+      battDischargeWh={sankeyBattDischargeWh}
+      consumptionWh={sankeyConsumptionWh}
+    />
+  </div>
+</div>
+{/if}
 
 <!-- Charts -->
 <div class="row g-3 mb-4">

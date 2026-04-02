@@ -328,8 +328,14 @@ for (const [k, v, l] of [
   ['price_mode',     'fixed',                        'Tariff mode: spotty or fixed'],
   ['fixed_price_ct', '30',                           'Fixed tariff (ct/kWh)'],
   ['mwst_percent',   '20',                           'MwSt (%)'],
-  ['netzgebuehr_ct', '0',                            'Netzgebühr (ct/kWh)'],
-  ['shelly_url',     '',                             'Shelly Pro 3EM URL (z.B. http://192.168.1.50)'],
+  ['netzgebuehr_ct',       '0',    'Netzgebühr (ct/kWh)'],
+  ['netz_discount_start',  '',     'Netzgebühr-Rabatt Beginn (HH:MM, leer = kein Rabatt)'],
+  ['netz_discount_end',    '',     'Netzgebühr-Rabatt Ende (HH:MM)'],
+  ['netz_discount_pct',    '0',    'Netzgebühr-Rabatt (%)'],
+  ['stromrabatt_active',   '0',    'Stromrabatt aktiv (0=nein, 1=ja)'],
+  ['stromrabatt_max_ct',   '6',    'Stromrabatt Maximalpreis (ct/kWh)'],
+  ['stromrabatt_limit_kwh','2900', 'Stromrabatt Jahresverbrauch-Grenze (kWh ab April)'],
+  ['shelly_url',           '',     'Shelly Pro 3EM URL (z.B. http://192.168.1.50)'],
 ]) db.prepare('INSERT OR IGNORE INTO app_settings (key, value, label) VALUES (?,?,?)').run(k, v, l);
 
 // Demo history

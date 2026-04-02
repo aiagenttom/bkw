@@ -1,6 +1,7 @@
 import db from '$lib/db.js';
 import { getTzOffset, getLocalToday } from '$lib/tz.js';
 import { simulatePowerbankSavings, loadPowerbanks } from '$lib/powerbank.js';
+import { getEffectiveNetzCt, applyStromrabatt, getCumulativeKwhFromApril } from '$lib/tarifutils.js';
 
 export async function load() {
   const inverters = db.prepare('SELECT * FROM inverters WHERE enabled = 1 ORDER BY name').all();
@@ -38,6 +39,8 @@ export async function load() {
   const mwstPct     = parseFloat(settings.mwst_percent ?? '0');
   const netzCt      = parseFloat(settings.netzgebuehr_ct ?? '0');
 
+  const cumulKwhFromApril = getCumulativeKwhFromApril(today, tzHours);
+
   // Today's savings per inverter – 100% Eigenverbrauch assumed
   const todaySavings = {};
   for (const inv of inverters) {
@@ -60,7 +63,8 @@ export async function load() {
       priceCt = row?.avg_ct ?? fixedCt;
     }
 
-    const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
+    const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulKwhFromApril);
+    const totalCtPerKwh = (effectivePriceCt + netzCt) * (1 + mwstPct / 100);
     todaySavings[inv.name] = parseFloat((yieldWh / 1000 * totalCtPerKwh / 100).toFixed(4));
   }
 
@@ -123,8 +127,10 @@ export async function load() {
       const yieldWh          = h.avg_w;
       const profileWh        = profile[h.hour] * 1000;
       const eigenverbrauchWh = Math.min(yieldWh, profileWh);
-      const priceCt          = mode === 'spotty' ? (hourlySpot[h.hour] ?? fixedCt) : fixedCt;
-      const totalCtPerKwh    = (priceCt + netzCt) * (1 + mwstPct / 100);
+      const spotPriceCt      = mode === 'spotty' ? (hourlySpot[h.hour] ?? fixedCt) : fixedCt;
+      const priceCt          = applyStromrabatt(spotPriceCt, settings, cumulKwhFromApril);
+      const effectiveNetzCt  = getEffectiveNetzCt(h.hour, settings);
+      const totalCtPerKwh    = (priceCt + effectiveNetzCt) * (1 + mwstPct / 100);
       totalEur += eigenverbrauchWh / 1000 * totalCtPerKwh / 100;
       hourlyData.push({ hour: h.hour, yieldWh, profileWh, priceCt });
     }
@@ -198,5 +204,5 @@ export async function load() {
 
   return { inverters, summary, liveData, settings, today, todaySavings, todaySavingsProfile,
            todaySavingsPowerbank, hasProfile, ankerChargeToday, ankerDischargeToday,
-           shellyLiveByInv, shellyConsumptionTodayByInv };
+           shellyLiveByInv, shellyConsumptionTodayByInv, cumulKwhFromApril };
 }

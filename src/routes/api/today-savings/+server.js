@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import db from '$lib/db.js';
 import { getTzOffset, getLocalToday } from '$lib/tz.js';
 import { simulatePowerbankSavings, loadPowerbanks } from '$lib/powerbank.js';
+import { getEffectiveNetzCt, applyStromrabatt, getCumulativeKwhFromApril } from '$lib/tarifutils.js';
 
 export function GET() {
   const settings = Object.fromEntries(
@@ -14,6 +15,8 @@ export function GET() {
   const globalFixed = parseFloat(settings.fixed_price_ct ?? '30');
   const mwstPct    = parseFloat(settings.mwst_percent ?? '0');
   const netzCt     = parseFloat(settings.netzgebuehr_ct ?? '0');
+
+  const cumulKwh = getCumulativeKwhFromApril(today, tzOffset);
 
   // 100% Eigenverbrauch savings
   const savings = {};
@@ -42,7 +45,8 @@ export function GET() {
       priceCt = row?.avg_ct ?? fixedCt;
     }
 
-    const totalCtPerKwh = (priceCt + netzCt) * (1 + mwstPct / 100);
+    const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulKwh);
+    const totalCtPerKwh = (effectivePriceCt + netzCt) * (1 + mwstPct / 100);
     savings[inv.name] = parseFloat((yieldWh / 1000 * totalCtPerKwh / 100).toFixed(4));
   }
 
@@ -112,7 +116,9 @@ export function GET() {
       if (yieldWh > 0) {
         // Direkter Eigenverbrauch: nur bei tatsächlichem PV-Ertrag
         const eigenverbrauchWh = Math.min(yieldWh, profileWh);
-        const totalCtPerKwh    = (priceCt + netzCt) * (1 + mwstPct / 100);
+        const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulKwh);
+        const effectiveNetzCt  = getEffectiveNetzCt(h, settings);
+        const totalCtPerKwh    = (effectivePriceCt + effectiveNetzCt) * (1 + mwstPct / 100);
         totalEur += eigenverbrauchWh / 1000 * totalCtPerKwh / 100;
       }
 

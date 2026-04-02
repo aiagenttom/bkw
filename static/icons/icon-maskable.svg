@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full bleed background (safe zone = inner 80%) -->
+  <rect width="512" height="512" fill="#1a1a2e"/>
+
+  <!-- Sun rays (slightly inset for safe area) -->
+  <g fill="#f39c12" opacity="0.85">
+    <rect x="248" y="90"  width="16" height="46" rx="8"/>
+    <rect x="248" y="376" width="16" height="46" rx="8"/>
+    <rect x="90"  y="248" width="46" height="16" rx="8"/>
+    <rect x="376" y="248" width="46" height="16" rx="8"/>
+    <rect x="344" y="110" width="16" height="46" rx="8" transform="rotate(45 352 133)"/>
+    <rect x="152" y="356" width="16" height="46" rx="8" transform="rotate(45 160 379)"/>
+    <rect x="110" y="152" width="46" height="16" rx="8" transform="rotate(45 133 160)"/>
+    <rect x="356" y="344" width="46" height="16" rx="8" transform="rotate(45 379 352)"/>
+  </g>
+
+  <!-- Sun circle -->
+  <circle cx="256" cy="256" r="76" fill="#f39c12"/>
+
+  <!-- Lightning bolt -->
+  <polygon
+    points="272,175 231,260 257,260 239,337 281,242 253,242"
+    fill="#1a1a2e"
+    opacity="0.9"
+  />
+</svg>

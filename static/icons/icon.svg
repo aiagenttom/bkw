@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="#1a1a2e"/>
+
+  <!-- Sun rays (8 rays) -->
+  <g fill="#f39c12" opacity="0.85">
+    <rect x="248" y="60"  width="16" height="52" rx="8"/>
+    <rect x="248" y="400" width="16" height="52" rx="8"/>
+    <rect x="60"  y="248" width="52" height="16" rx="8"/>
+    <rect x="400" y="248" width="52" height="16" rx="8"/>
+    <!-- diagonal rays -->
+    <rect x="346" y="96"  width="16" height="52" rx="8" transform="rotate(45 354 122)"/>
+    <rect x="150" y="364" width="16" height="52" rx="8" transform="rotate(45 158 390)"/>
+    <rect x="96"  y="150" width="52" height="16" rx="8" transform="rotate(45 122 158)"/>
+    <rect x="364" y="346" width="52" height="16" rx="8" transform="rotate(45 390 354)"/>
+  </g>
+
+  <!-- Sun circle -->
+  <circle cx="256" cy="256" r="80" fill="#f39c12"/>
+
+  <!-- Lightning bolt overlay (white, centered) -->
+  <polygon
+    points="272,170 230,262 258,262 240,342 284,238 254,238"
+    fill="#1a1a2e"
+    opacity="0.9"
+  />
+</svg>

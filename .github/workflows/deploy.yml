@@ -15,11 +15,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── 2. Node.js 22 einrichten ──────────────────────────────────────────
-      - name: Setup Node.js 20
+      # ── 2. Node.js einrichten ────────────────────────────────────────────
+      - name: Setup Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       # ── 3. Abhängigkeiten installieren ────────────────────────────────────
@@ -66,16 +66,24 @@ jobs:
               -p "${SSH_PORT}" \
               "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
               "node --version | grep -E '^v(2[0-9]|[3-9][0-9])\.' || { echo 'ERROR: Node.js 20+ required on server'; exit 1; } && \
+               echo \"Node: \$(node --version)\" && \
                cd ${{ secrets.DEPLOY_PATH }} && \
                npm ci --omit=dev --legacy-peer-deps && \
                pm2 startOrRestart ecosystem.config.cjs --update-env && \
                pm2 save"
 
-      # ── 8. Health-Check ───────────────────────────────────────────────────
+      # ── 8. Health-Check (via SSH auf localhost – umgeht Firewall/Proxy) ──
       - name: Health check
         run: |
-          sleep 5
-          curl --fail --silent --max-time 10 \
-            "http://${{ secrets.SSH_HOST }}:${{ secrets.APP_PORT || 3010 }}" \
-            > /dev/null && echo "✅ App is up" || echo "⚠️ Health check failed (non-blocking)"
+          SSH_PORT="${{ secrets.SSH_PORT }}"
+          SSH_PORT="${SSH_PORT:-22}"
+          APP_PORT="${{ secrets.APP_PORT }}"
+          APP_PORT="${APP_PORT:-3010}"
+          sleep 10
+          ssh -i ~/.ssh/deploy_key \
+              -p "${SSH_PORT}" \
+              "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+              "curl --fail --silent --max-time 10 http://localhost:${APP_PORT} > /dev/null \
+               && echo '✅ App is up' \
+               || (echo '⚠️ Health check failed – PM2 logs:'; pm2 logs bkw --lines 20 --nostream)"
         continue-on-error: true

@@ -235,7 +235,10 @@
         const discStart       = parseInt((settings.netz_discount_start || '').split(':')[0], 10);
         const discEnd         = parseInt((settings.netz_discount_end   || '').split(':')[0], 10);
         const discPct         = parseFloat(settings.netz_discount_pct ?? '0');
-        const stromrabattOn   = settings.stromrabatt_active === '1';
+        const discFromDay     = settings.netz_discount_from_day ? parseInt(settings.netz_discount_from_day, 10) : null;
+        const discToDay       = settings.netz_discount_to_day   ? parseInt(settings.netz_discount_to_day,   10) : null;
+        const todayDay        = parseInt((data.today || '').split('-')[2], 10);
+        const stromrabattOn   = data.inverters?.some(i => i.stromrabatt_active === 1) ?? false;
         const stromrabattMax  = parseFloat(settings.stromrabatt_max_ct ?? '6');
         const stromrabattLim  = parseFloat(settings.stromrabatt_limit_kwh ?? '2900');
         const cumulKwh        = data.cumulKwhFromApril ?? 0;
@@ -243,7 +246,8 @@
         const applyTaxes = (ct, hour) => {
           let effectiveCt   = stromrabattOn && cumulKwh < stromrabattLim ? Math.min(ct, stromrabattMax) : ct;
           let effectiveNetz = netzCt;
-          if (!isNaN(discStart) && discPct > 0 && hour >= discStart && hour < discEnd) {
+          const dayOk = !discFromDay || !discToDay || (todayDay >= discFromDay && todayDay <= discToDay);
+          if (!isNaN(discStart) && discPct > 0 && hour >= discStart && hour < discEnd && dayOk) {
             effectiveNetz = parseFloat((netzCt * (1 - discPct / 100)).toFixed(4));
           }
           return parseFloat(((effectiveCt + effectiveNetz) * (1 + mwstPct / 100)).toFixed(3));

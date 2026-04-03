@@ -45,7 +45,7 @@ export function GET() {
       priceCt = row?.avg_ct ?? fixedCt;
     }
 
-    const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulKwh);
+    const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulKwh, inv.stromrabatt_active === 1);
     const totalCtPerKwh = (effectivePriceCt + netzCt) * (1 + mwstPct / 100);
     savings[inv.name] = parseFloat((yieldWh / 1000 * totalCtPerKwh / 100).toFixed(4));
   }
@@ -116,8 +116,8 @@ export function GET() {
       if (yieldWh > 0) {
         // Direkter Eigenverbrauch: nur bei tatsächlichem PV-Ertrag
         const eigenverbrauchWh = Math.min(yieldWh, profileWh);
-        const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulKwh);
-        const effectiveNetzCt  = getEffectiveNetzCt(h, settings);
+        const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulKwh, inv.stromrabatt_active === 1);
+        const effectiveNetzCt  = getEffectiveNetzCt(h, settings, parseInt(today.split('-')[2], 10));
         const totalCtPerKwh    = (effectivePriceCt + effectiveNetzCt) * (1 + mwstPct / 100);
         totalEur += eigenverbrauchWh / 1000 * totalCtPerKwh / 100;
       }

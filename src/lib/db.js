@@ -279,6 +279,8 @@ if (!invCols.includes('shelly_phase_b_label'))
   db.exec("ALTER TABLE inverters ADD COLUMN shelly_phase_b_label TEXT");
 if (!invCols.includes('shelly_phase_c_label'))
   db.exec("ALTER TABLE inverters ADD COLUMN shelly_phase_c_label TEXT");
+if (!invCols.includes('stromrabatt_active'))
+  db.exec("ALTER TABLE inverters ADD COLUMN stromrabatt_active INTEGER NOT NULL DEFAULT 0");
 
 const histCols = db.prepare('PRAGMA table_info(bkw_history)').all().map(c => c.name);
 if (!histCols.includes('dc_strings'))
@@ -329,10 +331,11 @@ for (const [k, v, l] of [
   ['fixed_price_ct', '30',                           'Fixed tariff (ct/kWh)'],
   ['mwst_percent',   '20',                           'MwSt (%)'],
   ['netzgebuehr_ct',       '0',    'Netzgebühr (ct/kWh)'],
-  ['netz_discount_start',  '',     'Netzgebühr-Rabatt Beginn (HH:MM, leer = kein Rabatt)'],
-  ['netz_discount_end',    '',     'Netzgebühr-Rabatt Ende (HH:MM)'],
-  ['netz_discount_pct',    '0',    'Netzgebühr-Rabatt (%)'],
-  ['stromrabatt_active',   '0',    'Stromrabatt aktiv (0=nein, 1=ja)'],
+  ['netz_discount_start',    '',   'Netzgebühr-Rabatt Beginn (HH:MM, leer = kein Rabatt)'],
+  ['netz_discount_end',      '',   'Netzgebühr-Rabatt Ende (HH:MM)'],
+  ['netz_discount_pct',      '0',  'Netzgebühr-Rabatt (%)'],
+  ['netz_discount_from_day', '',   'Netzgebühr-Rabatt ab Tag des Monats (leer = ganzer Monat)'],
+  ['netz_discount_to_day',   '',   'Netzgebühr-Rabatt bis Tag des Monats'],
   ['stromrabatt_max_ct',   '6',    'Stromrabatt Maximalpreis (ct/kWh)'],
   ['stromrabatt_limit_kwh','2900', 'Stromrabatt Jahresverbrauch-Grenze (kWh ab April)'],
   ['shelly_url',           '',     'Shelly Pro 3EM URL (z.B. http://192.168.1.50)'],

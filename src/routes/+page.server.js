@@ -63,7 +63,7 @@ export async function load() {
       priceCt = row?.avg_ct ?? fixedCt;
     }
 
-    const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulKwhFromApril);
+    const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulKwhFromApril, inv.stromrabatt_active === 1);
     const totalCtPerKwh = (effectivePriceCt + netzCt) * (1 + mwstPct / 100);
     todaySavings[inv.name] = parseFloat((yieldWh / 1000 * totalCtPerKwh / 100).toFixed(4));
   }
@@ -128,8 +128,8 @@ export async function load() {
       const profileWh        = profile[h.hour] * 1000;
       const eigenverbrauchWh = Math.min(yieldWh, profileWh);
       const spotPriceCt      = mode === 'spotty' ? (hourlySpot[h.hour] ?? fixedCt) : fixedCt;
-      const priceCt          = applyStromrabatt(spotPriceCt, settings, cumulKwhFromApril);
-      const effectiveNetzCt  = getEffectiveNetzCt(h.hour, settings);
+      const priceCt          = applyStromrabatt(spotPriceCt, settings, cumulKwhFromApril, inv.stromrabatt_active === 1);
+      const effectiveNetzCt  = getEffectiveNetzCt(h.hour, settings, parseInt(today.split('-')[2], 10));
       const totalCtPerKwh    = (priceCt + effectiveNetzCt) * (1 + mwstPct / 100);
       totalEur += eigenverbrauchWh / 1000 * totalCtPerKwh / 100;
       hourlyData.push({ hour: h.hour, yieldWh, profileWh, priceCt });

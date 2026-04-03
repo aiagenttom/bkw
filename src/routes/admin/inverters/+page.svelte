@@ -121,12 +121,12 @@
       <div class="fw-semibold small mb-2"><i class="bi bi-clock me-1"></i>Netzgebühr-Zeitrabatt</div>
       <div class="row g-3 align-items-end">
         <div class="col-6 col-md-2">
-          <label class="form-label fw-semibold small" for="netz-disc-start">Von</label>
+          <label class="form-label fw-semibold small" for="netz-disc-start">Uhrzeit von</label>
           <input id="netz-disc-start" name="netz_discount_start" type="time" class="form-control form-control-sm"
                  value={settings.netz_discount_start || ''} />
         </div>
         <div class="col-6 col-md-2">
-          <label class="form-label fw-semibold small" for="netz-disc-end">Bis</label>
+          <label class="form-label fw-semibold small" for="netz-disc-end">Uhrzeit bis</label>
           <input id="netz-disc-end" name="netz_discount_end" type="time" class="form-control form-control-sm"
                  value={settings.netz_discount_end || ''} />
         </div>
@@ -138,27 +138,38 @@
             <span class="input-group-text">%</span>
           </div>
         </div>
-        <div class="col-12 col-md-6">
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold small" for="netz-disc-from-day">Monatstag von</label>
+          <div class="input-group input-group-sm">
+            <input id="netz-disc-from-day" name="netz_discount_from_day" type="number" min="1" max="31" step="1"
+                   class="form-control form-control-sm" placeholder="1"
+                   value={settings.netz_discount_from_day || ''} />
+            <span class="input-group-text">.</span>
+          </div>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold small" for="netz-disc-to-day">Monatstag bis</label>
+          <div class="input-group input-group-sm">
+            <input id="netz-disc-to-day" name="netz_discount_to_day" type="number" min="1" max="31" step="1"
+                   class="form-control form-control-sm" placeholder="31"
+                   value={settings.netz_discount_to_day || ''} />
+            <span class="input-group-text">.</span>
+          </div>
+        </div>
+        <div class="col-12">
           <small class="text-muted">
-            Leer lassen = kein Zeitrabatt. Beispiel: Von 10:00 bis 16:00 mit −20 % reduziert die Netzgebühr
-            in diesem Fenster auf {Math.round((parseFloat(settings.netzgebuehr_ct || 0)) * (1 - (parseFloat(settings.netz_discount_pct || 0)) / 100) * 100) / 100} ct/kWh.
+            Uhrzeit leer = kein Zeitrabatt. Monatstage leer = gilt den ganzen Monat.
+            Beispiel: 10:00–16:00, Tag 1–20, −20 % → Netzgebühr in diesem Fenster
+            = {Math.round((parseFloat(settings.netzgebuehr_ct || 0)) * (1 - (parseFloat(settings.netz_discount_pct || 0)) / 100) * 100) / 100} ct/kWh.
           </small>
         </div>
       </div>
 
       <hr class="my-3" />
 
-      <!-- Stromrabatt -->
-      <div class="fw-semibold small mb-2"><i class="bi bi-lightning-charge me-1"></i>Stromrabatt</div>
+      <!-- Stromrabatt (globale Konfiguration, Aktivierung pro Wechselrichter) -->
+      <div class="fw-semibold small mb-2"><i class="bi bi-lightning-charge me-1"></i>Stromrabatt <span class="fw-normal text-muted">(Konfiguration global, Aktivierung pro Wechselrichter)</span></div>
       <div class="row g-3 align-items-end">
-        <div class="col-12 col-md-3">
-          <div class="form-check form-switch mt-1">
-            <input class="form-check-input" type="checkbox" id="stromrabatt-active" name="stromrabatt_active"
-                   value="1" checked={settings.stromrabatt_active === '1'} />
-            <label class="form-check-label fw-semibold small" for="stromrabatt-active">Stromrabatt aktiv</label>
-          </div>
-          <small class="text-muted d-block">Börsentarif wird auf einen Maximalpreis gedeckelt.</small>
-        </div>
         <div class="col-6 col-md-2">
           <label class="form-label fw-semibold small" for="stromrabatt-max">Maximalpreis</label>
           <div class="input-group input-group-sm">
@@ -176,10 +187,10 @@
             <span class="input-group-text">kWh</span>
           </div>
         </div>
-        <div class="col-12 col-md-5">
+        <div class="col-12 col-md-8">
           <small class="text-muted">
-            Verbrauch wird ab 1. April des Jahres gezählt (Smartmeter-Daten bevorzugt, sonst Shelly).
-            Über der Grenze gilt wieder der normale Börsentarif.
+            Verbrauch ab 1. April gezählt (Smartmeter bevorzugt, sonst Shelly). Über der Grenze gilt
+            wieder der normale Börsentarif. Ob der Rabatt gilt, wird <strong>pro Wechselrichter</strong> aktiviert (siehe unten).
           </small>
         </div>
       </div>
@@ -317,6 +328,16 @@
                    placeholder="{settings.fixed_price_ct ?? 30} (global)"
                    value={inv.fixed_price_ct ?? ''} />
             <span class="input-group-text">ct</span>
+          </div>
+        </div>
+        <div class="col-12 col-md-4 d-flex align-items-end">
+          <div class="form-check form-switch mb-1">
+            <input class="form-check-input" type="checkbox" id="sr-active-{inv.id}" name="stromrabatt_active"
+                   checked={inv.stromrabatt_active === 1} />
+            <label class="form-check-label form-label-sm" for="sr-active-{inv.id}">
+              <i class="bi bi-lightning-charge me-1 text-warning"></i>Stromrabatt aktiv
+              <small class="text-muted ms-1">(max {settings.stromrabatt_max_ct || 6} ct bis {settings.stromrabatt_limit_kwh || 2900} kWh)</small>
+            </label>
           </div>
         </div>
       </div>

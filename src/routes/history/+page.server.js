@@ -15,7 +15,7 @@ export async function load({ url }) {
   `).all(months);
 
   const inverters = db.prepare(
-    'SELECT id, name, color FROM inverters WHERE enabled = 1 ORDER BY name'
+    'SELECT id, name, color, stromrabatt_active FROM inverters WHERE enabled = 1 ORDER BY name'
   ).all();
 
   const settings = Object.fromEntries(
@@ -32,10 +32,10 @@ export async function load({ url }) {
   const dateSet0 = [...new Set(rows.map(r => r.date))].sort();
   const cumulByDate = getCumulativeKwhByDate(dateSet0);
 
-  // Per-inverter fixed price lookup
+  // Per-inverter fixed price + stromrabatt lookup
   const invSettings = {};
   for (const inv of inverters) {
-    const row = db.prepare('SELECT price_mode, fixed_price_ct FROM inverters WHERE name = ?').get(inv.name);
+    const row = db.prepare('SELECT price_mode, fixed_price_ct, stromrabatt_active FROM inverters WHERE name = ?').get(inv.name);
     invSettings[inv.name] = row;
   }
 
@@ -43,7 +43,7 @@ export async function load({ url }) {
     const mode    = invSettings[r.inverter]?.price_mode ?? globalMode;
     const fixedCt = invSettings[r.inverter]?.fixed_price_ct ?? globalFixed;
     const priceCt = (mode === 'spotty' && r.avg_price_ct != null) ? r.avg_price_ct : fixedCt;
-    const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulByDate[r.date] ?? 0);
+    const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulByDate[r.date] ?? 0, invSettings[r.inverter]?.stromrabatt_active === 1);
     const totalCtPerKwh = (effectivePriceCt + netzCt) * (1 + mwstPct / 100);
     r.savings_eur = r.yield_wh != null
       ? parseFloat((r.yield_wh / 1000 * totalCtPerKwh / 100).toFixed(4))
@@ -136,8 +136,8 @@ export async function load({ url }) {
         const fixedCt  = inv?.fixed_price_ct ?? globalFixed;
         const priceCt  = (mode === 'spotty' && dailyRow?.avg_price_ct != null)
           ? dailyRow.avg_price_ct : fixedCt;
-        const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulByDate[h.day] ?? 0);
-        const effectiveNetzCt  = getEffectiveNetzCt(h.hour, settings);
+        const effectivePriceCt = applyStromrabatt(priceCt, settings, cumulByDate[h.day] ?? 0, invSettings[h.inverter]?.stromrabatt_active === 1);
+        const effectiveNetzCt  = getEffectiveNetzCt(h.hour, settings, parseInt(h.day.split('-')[2], 10));
         const totalCtPerKwh = (effectivePriceCt + effectiveNetzCt) * (1 + mwstPct / 100);
         const eur = eigenWh / 1000 * totalCtPerKwh / 100;
 

@@ -15,9 +15,8 @@ export const actions = {
   saveSettings: async ({ request }) => {
     const d = await request.formData();
     const upd = db.prepare('UPDATE app_settings SET value = ? WHERE key = ?');
-    const checkboxKeys = new Set(['stromrabatt_active']);
-    for (const key of ['sync_interval', 'auto_refresh_s', 'spotty_url', 'timezone', 'price_mode', 'fixed_price_ct', 'mwst_percent', 'netzgebuehr_ct', 'netz_discount_start', 'netz_discount_end', 'netz_discount_pct', 'stromrabatt_active', 'stromrabatt_max_ct', 'stromrabatt_limit_kwh', 'shelly_url']) {
-      const v = checkboxKeys.has(key) ? (d.has(key) ? '1' : '0') : d.get(key);
+    for (const key of ['sync_interval', 'auto_refresh_s', 'spotty_url', 'timezone', 'price_mode', 'fixed_price_ct', 'mwst_percent', 'netzgebuehr_ct', 'netz_discount_start', 'netz_discount_end', 'netz_discount_pct', 'netz_discount_from_day', 'netz_discount_to_day', 'stromrabatt_max_ct', 'stromrabatt_limit_kwh', 'shelly_url']) {
+      const v = d.get(key);
       if (v !== null) upd.run(v.toString().trim(), key);
     }
     return { success: 'Settings saved' };
@@ -34,13 +33,15 @@ export const actions = {
     const serial       = d.get('serial')?.toString().trim() || null;
     const shellyUrl         = d.get('shelly_url')?.toString().trim() || null;
     const shellyFeedinPhase = d.get('shelly_feedin_phase')?.toString() || '';
-    const shellyPhaseALabel = d.get('shelly_phase_a_label')?.toString().trim() || null;
-    const shellyPhaseBLabel = d.get('shelly_phase_b_label')?.toString().trim() || null;
-    const shellyPhaseCLabel = d.get('shelly_phase_c_label')?.toString().trim() || null;
+    const shellyPhaseALabel   = d.get('shelly_phase_a_label')?.toString().trim() || null;
+    const shellyPhaseBLabel   = d.get('shelly_phase_b_label')?.toString().trim() || null;
+    const shellyPhaseCLabel   = d.get('shelly_phase_c_label')?.toString().trim() || null;
+    const stromrabattActive   = d.has('stromrabatt_active') ? 1 : 0;
     db.prepare(`UPDATE inverters
       SET name=?, full_url=?, serial=?, color=?, price_mode=?, fixed_price_ct=?, kwp=?,
           shelly_url=?, shelly_feedin_phase=?,
-          shelly_phase_a_label=?, shelly_phase_b_label=?, shelly_phase_c_label=?
+          shelly_phase_a_label=?, shelly_phase_b_label=?, shelly_phase_c_label=?,
+          stromrabatt_active=?
       WHERE id=?`).run(
       name,
       d.get('full_url')?.toString().trim() || null,
@@ -54,6 +55,7 @@ export const actions = {
       shellyPhaseALabel,
       shellyPhaseBLabel,
       shellyPhaseCLabel,
+      stromrabattActive,
       id
     );
     return { success: `Inverter ${name} saved` };

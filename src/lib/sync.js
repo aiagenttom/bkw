@@ -266,9 +266,9 @@ export function syncDaily(date) {
   );
   const cumulKwh = getCumulativeKwhFromApril(target, tzOffset);
 
-  // Load per-inverter settings: { name → { price_mode, fixed_price_ct } }
+  // Load per-inverter settings: { name → { price_mode, fixed_price_ct, stromrabatt_active } }
   const invSettings = Object.fromEntries(
-    db.prepare('SELECT name, price_mode, fixed_price_ct FROM inverters').all()
+    db.prepare('SELECT name, price_mode, fixed_price_ct, stromrabatt_active FROM inverters').all()
       .map(i => [i.name, i])
   );
 
@@ -314,7 +314,7 @@ export function syncDaily(date) {
     } else {
       r.avg_price_ct = spottyAvgMap[r.inverter] ?? null;
     }
-    const effectivePriceCt = r.avg_price_ct != null ? applyStromrabatt(r.avg_price_ct, allSettings, cumulKwh) : null;
+    const effectivePriceCt = r.avg_price_ct != null ? applyStromrabatt(r.avg_price_ct, allSettings, cumulKwh, inv.stromrabatt_active === 1) : null;
     const totalCtPerKwh = effectivePriceCt != null ? (effectivePriceCt + netzCt) * (1 + mwstPct / 100) : null;
     r.savings_eur = totalCtPerKwh != null && r.yield_wh != null
       ? parseFloat((r.yield_wh / 1000 * totalCtPerKwh / 100).toFixed(4))

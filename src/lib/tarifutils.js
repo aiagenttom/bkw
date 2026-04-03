@@ -1,16 +1,26 @@
 import db from '$lib/db.js';
 
 /**
- * Effective Netzgebühr (ct/kWh) for a given hour, considering time-based discount.
- * @param {number} hour     - 0–23
- * @param {object} settings - app_settings as key→value map
+ * Effective Netzgebühr (ct/kWh) for a given hour and optional day-of-month,
+ * considering time-based discount and month-day range.
+ * @param {number}      hour     - 0–23
+ * @param {object}      settings - app_settings as key→value map
+ * @param {number|null} day      - day of month (1–31), or null to skip day-range check
  */
-export function getEffectiveNetzCt(hour, settings) {
+export function getEffectiveNetzCt(hour, settings, day = null) {
   const netzCt      = parseFloat(settings.netzgebuehr_ct   ?? '0');
   const start       = settings.netz_discount_start ?? '';
   const end         = settings.netz_discount_end   ?? '';
   const discountPct = parseFloat(settings.netz_discount_pct ?? '0');
   if (!start || !end || discountPct <= 0) return netzCt;
+
+  // Optional: only apply discount during a specific day-of-month range
+  if (day !== null) {
+    const fromDay = settings.netz_discount_from_day ? parseInt(settings.netz_discount_from_day, 10) : null;
+    const toDay   = settings.netz_discount_to_day   ? parseInt(settings.netz_discount_to_day,   10) : null;
+    if (fromDay && toDay && (day < fromDay || day > toDay)) return netzCt;
+  }
+
   const sh = parseInt(start.split(':')[0], 10);
   const eh = parseInt(end.split(':')[0],   10);
   return (hour >= sh && hour < eh)
@@ -20,14 +30,15 @@ export function getEffectiveNetzCt(hour, settings) {
 
 /**
  * Apply Stromrabatt price cap to a spot price.
- * If Stromrabatt is active and cumulative consumption is below the annual limit,
- * caps the effective price at stromrabatt_max_ct.
- * @param {number} basePriceCt   - spot price in ct/kWh
- * @param {object} settings
- * @param {number} cumulativeKwh - total consumption from April 1st so far (kWh)
+ * Caps the effective price at stromrabatt_max_ct when the inverter has Stromrabatt
+ * active and cumulative consumption is still below the annual limit.
+ * @param {number}  basePriceCt    - spot price in ct/kWh
+ * @param {object}  settings       - app_settings key→value map (for limit/max values)
+ * @param {number}  cumulativeKwh  - total consumption from April 1st so far (kWh)
+ * @param {boolean} inverterActive - whether THIS inverter has Stromrabatt activated
  */
-export function applyStromrabatt(basePriceCt, settings, cumulativeKwh) {
-  if (settings.stromrabatt_active !== '1') return basePriceCt;
+export function applyStromrabatt(basePriceCt, settings, cumulativeKwh, inverterActive = false) {
+  if (!inverterActive) return basePriceCt;
   const limitKwh = parseFloat(settings.stromrabatt_limit_kwh ?? '2900');
   const maxCt    = parseFloat(settings.stromrabatt_max_ct    ?? '6');
   return cumulativeKwh < limitKwh ? Math.min(basePriceCt, maxCt) : basePriceCt;

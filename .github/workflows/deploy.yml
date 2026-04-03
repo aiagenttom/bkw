@@ -69,8 +69,7 @@ jobs:
                echo \"Node: \$(node --version)\" && \
                cd ${{ secrets.DEPLOY_PATH }} && \
                npm ci --omit=dev --legacy-peer-deps && \
-               pm2 startOrRestart ecosystem.config.cjs --update-env && \
-               pm2 save"
+               sudo systemctl restart bkw"
 
       # ── 8. Health-Check (via SSH auf localhost – umgeht Firewall/Proxy) ──
       - name: Health check
@@ -85,5 +84,5 @@ jobs:
               "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
               "curl --fail --silent --max-time 10 http://localhost:${APP_PORT} > /dev/null \
                && echo '✅ App is up' \
-               || (echo '⚠️ Health check failed – PM2 logs:'; pm2 logs bkw --lines 20 --nostream)"
+               || (echo '⚠️ Health check failed – systemd logs:'; sudo journalctl -u bkw -n 20 --no-pager)"
         continue-on-error: true
